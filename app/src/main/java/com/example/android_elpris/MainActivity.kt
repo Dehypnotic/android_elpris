@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -33,10 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.example.android_elpris.network.PricePoint
 import com.example.android_elpris.network.fetchPrices
 import com.example.android_elpris.ui.theme.Android_elprisTheme
@@ -90,8 +91,8 @@ fun PriceScreen(modifier: Modifier = Modifier) {
             }
         } catch (e: Exception) {
             val today = LocalDate.now()
-            if (e.message?.contains("HTTP 404") == true) {
-                error = when {
+            error = if (e.message?.contains("HTTP 404") == true) {
+                when {
                     selectedDate.isAfter(today.plusDays(1)) ->
                         "Priser for fremtidige datoer er ikke tilgjengelige."
                     selectedDate.isEqual(today.plusDays(1)) ->
@@ -100,7 +101,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                         "Ingen priser funnet for denne dagen."
                 }
             } else {
-                error = "En feil oppstod: ${e.message}"
+                "En feil oppstod: ${e.message}"
             }
         } finally {
             isLoading = false
@@ -112,7 +113,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
             selectedZone = selectedZone,
             onZoneSelected = { newZone ->
                 selectedZone = newZone
-                sharedPrefs.edit().putString("selected_zone", newZone).apply()
+                sharedPrefs.edit { putString("selected_zone", newZone) }
             },
             modifier = Modifier.padding(8.dp)
         )
@@ -145,11 +146,16 @@ fun PriceScreen(modifier: Modifier = Modifier) {
 @Composable
 fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     val zones = listOf("NO1", "NO2", "NO3", "NO4", "NO5")
+    val selectedButtonColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    )
+
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         zones.forEach { zone ->
             Button(
                 onClick = { onZoneSelected(zone) },
-                enabled = selectedZone != zone
+                colors = if (selectedZone == zone) selectedButtonColors else ButtonDefaults.buttonColors()
             ) {
                 Text(text = zone)
             }
@@ -162,6 +168,8 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, m
     val context = LocalContext.current
     val isTomorrowAvailable = LocalTime.now().hour >= 13
     val today = LocalDate.now()
+    val yesterday = today.minusDays(1)
+    val tomorrow = today.plusDays(1)
 
     val datePickerDialog = DatePickerDialog(
         context,
@@ -171,20 +179,26 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, m
         selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth
     )
 
+    val selectedButtonColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    )
+
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         Button(
-            onClick = { onDateSelected(today.minusDays(1)) },
-            enabled = selectedDate != today.minusDays(1)
+            onClick = { onDateSelected(yesterday) },
+            colors = if (selectedDate == yesterday) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I går") }
         Spacer(modifier = Modifier.width(8.dp))
         Button(
             onClick = { onDateSelected(today) },
-            enabled = selectedDate != today
+            colors = if (selectedDate == today) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I dag") }
         Spacer(modifier = Modifier.width(8.dp))
         Button(
-            onClick = { onDateSelected(today.plusDays(1)) },
-            enabled = isTomorrowAvailable && selectedDate != today.plusDays(1)
+            onClick = { onDateSelected(tomorrow) },
+            enabled = isTomorrowAvailable,
+            colors = if (selectedDate == tomorrow) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I morgen") }
         Spacer(modifier = Modifier.width(8.dp))
         Button(onClick = { datePickerDialog.show() }) { Text("Velg dato") }
