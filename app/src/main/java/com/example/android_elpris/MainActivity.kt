@@ -1,6 +1,7 @@
 package com.example.android_elpris
 
 import android.app.DatePickerDialog
+import android.content.Context
 import android.os.Bundle
 import android.widget.DatePicker
 import androidx.activity.ComponentActivity
@@ -44,7 +45,8 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
+import java.util.Locale
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +68,12 @@ fun PriceScreen(modifier: Modifier = Modifier) {
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    var selectedZone by remember { mutableStateOf("NO3") }
+    val context = LocalContext.current
+    val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+
+    var selectedZone by remember {
+        mutableStateOf(sharedPrefs.getString("selected_zone", "NO3") ?: "NO3")
+    }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
     LaunchedEffect(selectedZone, selectedDate) {
@@ -87,7 +94,10 @@ fun PriceScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize()) {
         ZoneSelector(
             selectedZone = selectedZone,
-            onZoneSelected = { selectedZone = it },
+            onZoneSelected = { newZone ->
+                selectedZone = newZone
+                sharedPrefs.edit().putString("selected_zone", newZone).apply()
+            },
             modifier = Modifier.padding(8.dp)
         )
         DateSelector(
@@ -115,7 +125,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                     )
                 }
                 else -> {
-                    PriceChart(prices = prices, zone = selectedZone)
+                    PriceChart(prices = prices, zone = selectedZone, selectedDate = selectedDate)
                 }
             }
         }
@@ -141,32 +151,38 @@ fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifie
 fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val isTomorrowAvailable = LocalTime.now().hour >= 13
-
-    val year = selectedDate.year
-    val month = selectedDate.monthValue - 1
-    val day = selectedDate.dayOfMonth
+    val today = LocalDate.now()
 
     val datePickerDialog = DatePickerDialog(
         context,
-        { _: DatePicker, selectedYear: Int, selectedMonth: Int, selectedDayOfMonth: Int ->
-            onDateSelected(LocalDate.of(selectedYear, selectedMonth + 1, selectedDayOfMonth))
+        { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
+            onDateSelected(LocalDate.of(year, month + 1, dayOfMonth))
         },
-        year, month, day
+        selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth
     )
 
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = { onDateSelected(LocalDate.now().minusDays(1)) }) { Text("I går") }
+        Button(
+            onClick = { onDateSelected(today.minusDays(1)) },
+            enabled = selectedDate != today.minusDays(1)
+        ) { Text("I går") }
         Spacer(modifier = Modifier.width(8.dp))
-        Button(onClick = { onDateSelected(LocalDate.now()) }) { Text("I dag") }
+        Button(
+            onClick = { onDateSelected(today) },
+            enabled = selectedDate != today
+        ) { Text("I dag") }
         Spacer(modifier = Modifier.width(8.dp))
-        Button(onClick = { onDateSelected(LocalDate.now().plusDays(1)) }, enabled = isTomorrowAvailable) { Text("I morgen") }
+        Button(
+            onClick = { onDateSelected(today.plusDays(1)) },
+            enabled = isTomorrowAvailable && selectedDate != today.plusDays(1)
+        ) { Text("I morgen") }
         Spacer(modifier = Modifier.width(8.dp))
         Button(onClick = { datePickerDialog.show() }) { Text("Velg dato") }
     }
 }
 
 @Composable
-fun PriceChart(prices: List<PricePoint>, zone: String, modifier: Modifier = Modifier) {
+fun PriceChart(prices: List<PricePoint>, zone: String, selectedDate: LocalDate, modifier: Modifier = Modifier) {
     val pricesWithVat = remember(prices, zone) {
         prices.map {
             val price = if (zone != "NO4") it.NOK_per_kWh * 1.25 else it.NOK_per_kWh
@@ -174,29 +190,39 @@ fun PriceChart(prices: List<PricePoint>, zone: String, modifier: Modifier = Modi
         }
     }
 
-    val maxPrice = remember(pricesWithVat) {
-        pricesWithVat.maxOfOrNull { it.second } ?: 1.0
+    val maxPriceAbs = remember(pricesWithVat) {
+        pricesWithVat.maxOfOrNull { abs(it.second) } ?: 1.0
     }
 
-    val vatLabel = if (zone != "NO4") "Priser i øre/kWh inkl. mva" else "Priser i øre/kWh"
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
+    val dateText = selectedDate.format(dateFormatter)
+
+    val headerText = if (zone != "NO4") {
+        "Priser i øre/kWh inkl. mva for $dateText"
+    } else {
+        "Priser i øre/kWh for $dateText"
+    }
 
     Column(modifier = modifier.padding(horizontal = 16.dp)) {
-        Text(text = vatLabel, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+        Text(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         LazyColumn {
             items(pricesWithVat) { (pricePoint, priceInOre) ->
-                ChartBar(pricePoint = pricePoint, priceInOre = priceInOre, maxPrice = maxPrice)
+                ChartBar(pricePoint = pricePoint, priceInOre = priceInOre, maxPriceAbs = maxPriceAbs)
             }
         }
     }
 }
 
 @Composable
-fun ChartBar(pricePoint: PricePoint, priceInOre: Double, maxPrice: Double, modifier: Modifier = Modifier) {
-    val barFraction = (priceInOre / maxPrice).toFloat()
+fun ChartBar(pricePoint: PricePoint, priceInOre: Double, maxPriceAbs: Double, modifier: Modifier = Modifier) {
+    val barFraction = (abs(priceInOre) / maxPriceAbs).toFloat()
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
     val hour = remember(pricePoint.time_start) {
         timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(pricePoint.time_start))
     }
+
+    val barColor = if (priceInOre < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val priceText = "%.2f".format(priceInOre)
 
     Row(
         modifier = modifier
@@ -206,19 +232,34 @@ fun ChartBar(pricePoint: PricePoint, priceInOre: Double, maxPrice: Double, modif
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp))
-        
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(barFraction)
-                .background(MaterialTheme.colorScheme.primary)
-                .padding(horizontal = 4.dp),
-            contentAlignment = Alignment.CenterEnd
-        ) {
-            Text(
-                text = "%.2f".format(priceInOre),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimary
+
+        if (barFraction < 0.2f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(barFraction)
+                    .height(20.dp)
+                    .background(barColor)
             )
+            Text(
+                text = priceText,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(barFraction)
+                    .height(20.dp)
+                    .background(barColor)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    text = priceText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 }
