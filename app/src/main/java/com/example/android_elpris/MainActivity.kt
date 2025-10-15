@@ -6,6 +6,7 @@ import android.widget.DatePicker
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,7 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.android_elpris.network.PricePoint
 import com.example.android_elpris.network.fetchPrices
@@ -111,7 +115,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                     )
                 }
                 else -> {
-                    PriceList(prices = prices)
+                    PriceChart(prices = prices, zone = selectedZone)
                 }
             }
         }
@@ -162,31 +166,59 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, m
 }
 
 @Composable
-fun PriceList(prices: List<PricePoint>, modifier: Modifier = Modifier) {
-    LazyColumn(modifier = modifier) {
-        items(prices) { price ->
-            PriceRow(price = price)
+fun PriceChart(prices: List<PricePoint>, zone: String, modifier: Modifier = Modifier) {
+    val pricesWithVat = remember(prices, zone) {
+        prices.map {
+            val price = if (zone != "NO4") it.NOK_per_kWh * 1.25 else it.NOK_per_kWh
+            it to price * 100 // Pair the original PricePoint with the calculated øre price
+        }
+    }
+
+    val maxPrice = remember(pricesWithVat) {
+        pricesWithVat.maxOfOrNull { it.second } ?: 1.0
+    }
+
+    val vatLabel = if (zone != "NO4") "Priser i øre/kWh inkl. mva" else "Priser i øre/kWh"
+
+    Column(modifier = modifier.padding(horizontal = 16.dp)) {
+        Text(text = vatLabel, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+        LazyColumn {
+            items(pricesWithVat) { (pricePoint, priceInOre) ->
+                ChartBar(pricePoint = pricePoint, priceInOre = priceInOre, maxPrice = maxPrice)
+            }
         }
     }
 }
 
 @Composable
-fun PriceRow(price: PricePoint, modifier: Modifier = Modifier) {
-    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    val startTime = remember(price.time_start) {
-        price.time_start.let { timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(it)) }
-    }
-    val endTime = remember(price.time_end) {
-        price.time_end.let { timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(it)) }
+fun ChartBar(pricePoint: PricePoint, priceInOre: Double, maxPrice: Double, modifier: Modifier = Modifier) {
+    val barFraction = (priceInOre / maxPrice).toFloat()
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
+    val hour = remember(pricePoint.time_start) {
+        timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(pricePoint.time_start))
     }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .height(24.dp)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = "$startTime - $endTime")
-        Text(text = "%.2f NOK/kWh".format(price.NOK_per_kWh))
+        Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp))
+        
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(barFraction)
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 4.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                text = "%.2f".format(priceInOre),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
     }
 }
