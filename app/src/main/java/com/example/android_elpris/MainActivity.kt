@@ -79,13 +79,29 @@ fun PriceScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(selectedZone, selectedDate) {
         isLoading = true
         error = null
+        prices = emptyList()
         try {
             val fetchedPrices = withContext(Dispatchers.IO) {
                 fetchPrices(selectedDate, selectedZone)
             }
             prices = fetchedPrices
+            if (fetchedPrices.isEmpty()) {
+                error = "Ingen priser funnet for denne dagen."
+            }
         } catch (e: Exception) {
-            error = e.message
+            val today = LocalDate.now()
+            if (e.message?.contains("HTTP 404") == true) {
+                error = when {
+                    selectedDate.isAfter(today.plusDays(1)) ->
+                        "Priser for fremtidige datoer er ikke tilgjengelige."
+                    selectedDate.isEqual(today.plusDays(1)) ->
+                        "Prisene for i morgen er ikke klare ennå. De publiseres vanligvis etter kl. 13."
+                    else ->
+                        "Ingen priser funnet for denne dagen."
+                }
+            } else {
+                error = "En feil oppstod: ${e.message}"
+            }
         } finally {
             isLoading = false
         }
@@ -113,15 +129,9 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                 }
                 error != null -> {
                     Text(
-                        text = "Error: $error",
-                        color = MaterialTheme.colorScheme.error,
+                        text = error!!,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.align(Alignment.Center).padding(16.dp)
-                    )
-                }
-                prices.isEmpty() && !isLoading -> {
-                    Text(
-                        text = "Ingen priser funnet for denne dagen.",
-                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
                 else -> {
