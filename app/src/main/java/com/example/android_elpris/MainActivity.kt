@@ -189,24 +189,21 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, m
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     )
 
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         Button(
             onClick = { onDateSelected(yesterday) },
             colors = if (selectedDate == yesterday) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I går") }
-        Spacer(modifier = Modifier.width(8.dp))
         Button(
             onClick = { onDateSelected(today) },
             colors = if (selectedDate == today) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I dag") }
-        Spacer(modifier = Modifier.width(8.dp))
         Button(
             onClick = { onDateSelected(tomorrow) },
             enabled = isTomorrowAvailable,
             colors = if (selectedDate == tomorrow) selectedButtonColors else ButtonDefaults.buttonColors()
         ) { Text("I morgen") }
-        Spacer(modifier = Modifier.width(8.dp))
-        Button(onClick = { datePickerDialog.show() }) { Text("Velg dato") }
+        Button(onClick = { datePickerDialog.show() }) { Text("Dato") }
     }
 }
 
