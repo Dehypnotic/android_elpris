@@ -27,6 +27,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -150,19 +152,18 @@ fun PriceScreen(modifier: Modifier = Modifier) {
 @Composable
 fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     val zones = listOf("NO1", "NO2", "NO3", "NO4", "NO5")
-    val selectedButtonColors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-    )
+    val selectedIndex = zones.indexOf(selectedZone)
 
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        zones.forEach { zone ->
-            Button(
+    TabRow(
+        selectedTabIndex = selectedIndex,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        zones.forEachIndexed { index, zone ->
+            Tab(
+                selected = selectedIndex == index,
                 onClick = { onZoneSelected(zone) },
-                colors = if (selectedZone == zone) selectedButtonColors else ButtonDefaults.buttonColors()
-            ) {
-                Text(text = zone)
-            }
+                text = { Text(text = zone) }
+            )
         }
     }
 }
