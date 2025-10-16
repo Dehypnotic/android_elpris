@@ -10,9 +10,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,7 +36,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
@@ -217,6 +221,9 @@ fun PriceChart(prices: List<PricePoint>, zone: String, selectedDate: LocalDate, 
     val maxPriceAbs = remember(pricesWithVat) {
         pricesWithVat.maxOfOrNull { abs(it.second) } ?: 1.0
     }
+    val minPrice = remember(pricesWithVat) { pricesWithVat.filter { it.second >= 0 }.minOfOrNull { it.second } ?: 0.0 }
+    val maxPrice = remember(pricesWithVat) { pricesWithVat.maxOfOrNull { it.second } ?: 1.0 }
+
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
     val dateText = selectedDate.format(dateFormatter)
@@ -227,63 +234,124 @@ fun PriceChart(prices: List<PricePoint>, zone: String, selectedDate: LocalDate, 
         "Priser i øre/kWh for $dateText"
     }
 
+    val currentHour = LocalTime.now().hour
+
     Column(modifier = modifier.padding(horizontal = 16.dp)) {
         Text(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-        LazyColumn {
-            items(pricesWithVat) { (pricePoint, priceInOre) ->
-                ChartBar(pricePoint = pricePoint, priceInOre = priceInOre, maxPriceAbs = maxPriceAbs)
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val barHeight = maxHeight / 24
+            LazyColumn {
+                items(pricesWithVat) { (pricePoint, priceInOre) ->
+                    ChartBar(
+                        pricePoint = pricePoint,
+                        priceInOre = priceInOre,
+                        maxPriceAbs = maxPriceAbs,
+                        minPrice = minPrice,
+                        maxPrice = maxPrice,
+                        selectedDate = selectedDate,
+                        currentHour = currentHour,
+                        modifier = Modifier.height(barHeight)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ChartBar(pricePoint: PricePoint, priceInOre: Double, maxPriceAbs: Double, modifier: Modifier = Modifier) {
-    val barFraction = (abs(priceInOre) / maxPriceAbs).toFloat()
+fun ChartBar(
+    pricePoint: PricePoint,
+    priceInOre: Double,
+    maxPriceAbs: Double,
+    minPrice: Double,
+    maxPrice: Double,
+    selectedDate: LocalDate,
+    currentHour: Int,
+    modifier: Modifier = Modifier
+) {
+    val barFraction = if (priceInOre >= 0) {
+        val priceRange = maxPrice - minPrice
+        val minBarWidth = 0.12f
+        val maxBarWidth = 1.0f
+        val widthRange = maxBarWidth - minBarWidth
+
+        if (priceRange > 0) {
+            val priceFraction = ((priceInOre - minPrice) / priceRange).toFloat()
+            (minBarWidth + (priceFraction * widthRange)).coerceIn(minBarWidth, maxBarWidth)
+        } else {
+            maxBarWidth // All positive prices are the same, make them full width
+        }
+    } else {
+        (abs(priceInOre) / maxPriceAbs).toFloat()
+    }
+
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
     val hour = remember(pricePoint.time_start) {
         timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(pricePoint.time_start))
     }
 
-    val barColor = if (priceInOre < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val colorFraction = if (priceInOre >= 0) {
+        val range = maxPrice - minPrice
+        if (range > 0) {
+            ((priceInOre - minPrice) / range).toFloat().coerceIn(0f, 1f)
+        } else {
+            0f // All positive prices are the same, default to green
+        }
+    } else {
+        -1f // Sentinel for negative
+    }
+
+    val barColor = if (colorFraction < 0) {
+        Color.Black
+    } else {
+        Color(
+            red = colorFraction,
+            green = 1 - colorFraction,
+            blue = 0f
+        )
+    }
+
+    val textColor = if (colorFraction < 0) { // Negative price, black background
+        Color.White
+    } else {
+        // Luminance calculation: (0.299*R + 0.587*G + 0.114*B)
+        val luminance = 0.299 * colorFraction + 0.587 * (1 - colorFraction)
+        if (luminance > 0.5) Color.Black else Color.White
+    }
+
     val priceText = "%.2f".format(priceInOre)
+
+    val isCurrentHour = remember(hour, currentHour, selectedDate) {
+        hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(24.dp)
-            .padding(vertical = 2.dp),
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp))
+        Text(
+            text = hour,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(24.dp),
+            color = if (isCurrentHour) Color.Red else Color.Unspecified,
+            fontWeight = if (isCurrentHour) FontWeight.Bold else null
+        )
 
-        if (barFraction < 0.2f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(barFraction)
-                    .height(20.dp)
-                    .background(barColor)
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(barFraction)
+                .fillMaxHeight()
+                .background(barColor)
+                .padding(horizontal = 4.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
             Text(
                 text = priceText,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 4.dp)
+                color = textColor
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(barFraction)
-                    .height(20.dp)
-                    .background(barColor)
-                    .padding(horizontal = 4.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Text(
-                    text = priceText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            }
         }
     }
 }
