@@ -13,3 +13,64 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Built application files
+*.apk
+*.ap_
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+build/
+.gradle/
+captures/
+.externalNativeBuild/
+
+# Local configuration files (specific to your environment)
+local.properties
+.idea/gradle.xml
+.idea/vcs.xml
+.idea/misc.xml
+.idea/render.xml
+.idea/codeStyles/
+.idea/dictionaries/
+.idea/copyright/
+.idea/encodings.xml
+.idea/jarRepositories.xml
+.idea/inspectionProfiles/
+.idea/jsLibraryMappings.xml
+.idea/markdown-navigator.xml
+.idea/scopes/
+.idea/shelf/
+.idea/uiDesigner.xml
+.idea/watcherTasks.xml
+.idea/webResources.xml
+.idea/workspace.xml
+.idea/runConfigurations/
+.idea/sonarlint/
+
+# Gradle files
+.gradle/
+gradle-wrapper.jar
+
+# Android Studio generated files
+*.iml
+
+# Keystore files (if not intended for version control)
+*.jks
+*.keystore
+
+# Google Services (e.g., Firebase) if not intended for version control
+google-services.json
+
+# Navigation component files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# External native build folder generated in Android Studio 2.2 and later
+externalNativeBuild.cxx/
