@@ -86,3 +86,4 @@ externalNativeBuild.cxx/
 *.aab
 /.idea
 .idea/deploymentTargetSelector.xml
+.idea/deploymentTargetSelector.xml
