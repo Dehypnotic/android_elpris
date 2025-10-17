@@ -51,6 +51,15 @@ local.properties
 .idea/workspace.xml
 .idea/runConfigurations/
 .idea/sonarlint/
+# IntelliJ IDEA / Android Studio
+.idea/tasks.xml
+.idea/libraries/
+.idea/modules.xml
+.idea/shelf/
+.idea/caches/
+.idea/assetWizardSettings.xml
+.idea/usage.statistics.xml
+.idea/external_build_system/
 
 # Gradle files
 .gradle/
@@ -75,3 +84,5 @@ captures/
 # External native build folder generated in Android Studio 2.2 and later
 externalNativeBuild.cxx/
 *.aab
+/.idea
+.idea/deploymentTargetSelector.xml
