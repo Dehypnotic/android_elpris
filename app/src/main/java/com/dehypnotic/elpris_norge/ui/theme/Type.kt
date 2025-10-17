@@ -1,4 +1,4 @@
-package com.example.android_elpris.ui.theme
+package com.dehypnotic.elpris_norge.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

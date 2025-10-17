@@ -1,4 +1,4 @@
-package com.example.android_elpris
+package com.dehypnotic.elpris_norge
 
 import android.app.DatePickerDialog
 import android.content.Context
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,9 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.example.android_elpris.network.PricePoint
-import com.example.android_elpris.network.fetchPrices
-import com.example.android_elpris.ui.theme.Android_elprisTheme
+import com.dehypnotic.elpris_norge.network.PricePoint
+import com.dehypnotic.elpris_norge.network.fetchPrices
+import com.dehypnotic.elpris_norge.ui.theme.Android_elprisTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate

@@ -1,4 +1,4 @@
-package com.example.android_elpris
+package com.dehypnotic.elpris_norge
 
 import org.junit.Test
 

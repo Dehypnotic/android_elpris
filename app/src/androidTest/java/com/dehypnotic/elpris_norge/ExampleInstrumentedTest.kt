@@ -1,4 +1,4 @@
-package com.example.android_elpris
+package com.dehypnotic.elpris_norge
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

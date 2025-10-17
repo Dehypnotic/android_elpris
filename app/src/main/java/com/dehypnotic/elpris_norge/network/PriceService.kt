@@ -1,4 +1,4 @@
-package com.example.android_elpris.network
+package com.dehypnotic.elpris_norge.network
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
