@@ -233,9 +233,9 @@ fun PriceChart(prices: List<PricePoint>, zone: String, selectedDate: LocalDate, 
 
     val currentHour = LocalTime.now().hour
 
-    Column(modifier = modifier.padding(horizontal = 16.dp)) {
+    Column(modifier = modifier.padding(horizontal = 16.dp).fillMaxSize()) {
         Text(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val barHeight = maxHeight / 24
             LazyColumn {
                 items(pricesWithVat) { (pricePoint, priceInOre) ->
