@@ -88,3 +88,10 @@ externalNativeBuild.cxx/
 .idea/deploymentTargetSelector.xml
 .idea/deploymentTargetSelector.xml
 .idea/deploymentTargetSelector.xml
+app/release/baselineProfiles/0/app-release.dm
+app/release/baselineProfiles/1/app-release.dm
+app/release/output-metadata.json
+hs_err_pid1050904.log
+hs_err_pid1057436.log
+replay_pid1050904.log
+replay_pid1057436.log
