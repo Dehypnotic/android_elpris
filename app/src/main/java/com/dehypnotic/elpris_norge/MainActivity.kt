@@ -220,15 +220,19 @@ fun PriceChart(prices: List<PricePoint>, zone: String, selectedDate: LocalDate, 
     }
     val minPrice = remember(pricesWithVat) { pricesWithVat.filter { it.second >= 0 }.minOfOrNull { it.second } ?: 0.0 }
     val maxPrice = remember(pricesWithVat) { pricesWithVat.maxOfOrNull { it.second } ?: 1.0 }
+    val averagePrice = remember(pricesWithVat) {
+        if (pricesWithVat.isNotEmpty()) pricesWithVat.map { it.second }.average() else 0.0
+    }
 
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
     val dateText = selectedDate.format(dateFormatter)
 
+    val averagePriceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", averagePrice)
     val headerText = if (zone != "NO4") {
-        "Priser i øre/kWh inkl. mva for $dateText"
+        "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
     } else {
-        "Priser i øre/kWh for $dateText"
+        "Priser i øre/kWh for $dateText. Snitt: $averagePriceText"
     }
 
     val currentHour = LocalTime.now().hour
@@ -316,7 +320,7 @@ fun ChartBar(
         if (luminance > 0.5) Color.Black else Color.White
     }
 
-    val priceText = "%.2f".format(priceInOre)
+    val priceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", priceInOre)
 
     val isCurrentHour = remember(hour, currentHour, selectedDate) {
         hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
