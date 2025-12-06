@@ -16,21 +16,46 @@ data class PricePoint(
 )
 
 suspend fun fetchPrices(date: LocalDate, zone: String): List<PricePoint> {
-    val url = "https://www.hvakosterstrommen.no/api/v1/prices/%d/%02d-%02d_%s.json".format(
-        date.year,
-        date.monthValue,
-        date.dayOfMonth,
-        zone
+    val urls = listOf(
+        "https://www.hvakosterstrommen.no/api/v1/prices/%d/%02d-%02d_%s.json".format(
+            date.year,
+            date.monthValue,
+            date.dayOfMonth,
+            zone
+        ),
+        "https://minimal-proxy.vercel.app/api/prices?date=%d/%02d-%02d&zone=%s".format(
+            date.year,
+            date.monthValue,
+            date.dayOfMonth,
+            zone
+        )
     )
 
     val client = OkHttpClient()
-    val req = Request.Builder().url(url).build()
-    client.newCall(req).execute().use { resp ->
-        if (!resp.isSuccessful) error("HTTP ${resp.code}")
-        val body = resp.body?.string() ?: error("Empty body")
-        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-        val type = Types.newParameterizedType(List::class.java, PricePoint::class.java)
-        val adapter = moshi.adapter<List<PricePoint>>(type)
-        return adapter.fromJson(body) ?: emptyList()
+    val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    val type = Types.newParameterizedType(List::class.java, PricePoint::class.java)
+    val adapter = moshi.adapter<List<PricePoint>>(type)
+
+    var lastException: Exception? = null
+
+    for (url in urls) {
+        try {
+            val req = Request.Builder().url(url).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string()
+                    if (body != null) {
+                        return adapter.fromJson(body) ?: emptyList()
+                    }
+                } else {
+                    lastException = Exception("HTTP ${resp.code} for URL $url")
+                }
+            }
+        } catch (e: Exception) {
+            lastException = e
+        }
     }
+
+    // If all URLs fail, throw the last recorded exception
+    throw lastException ?: Exception("Failed to fetch prices from all available sources.")
 }
