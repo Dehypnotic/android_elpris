@@ -15,10 +15,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.dehypnotic.elpris_norge.network.PricePoint
@@ -350,7 +353,12 @@ fun PriceChart(
     val currentHour = LocalTime.now().hour
 
     Column(modifier = modifier.fillMaxSize()) {
-        Text(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+        AutoResizeText(
+            text = headerText,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        )
         LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
             items(pricesInfo) { priceInfo ->
                 ChartBar(
@@ -581,5 +589,40 @@ fun DefaultBar(
             )
         }
     }
+}
+
+@Composable
+fun AutoResizeText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null
+) {
+    var resizedTextStyle by remember(text, style) { mutableStateOf(style) }
+    var shouldDraw by remember { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        modifier = modifier.drawWithContent {
+            if (shouldDraw) {
+                drawContent()
+            }
+        },
+        style = resizedTextStyle,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = textAlign,
+        onTextLayout = { result ->
+            if (result.hasVisualOverflow) {
+                if (resizedTextStyle.fontSize != TextUnit.Unspecified) {
+                    resizedTextStyle = resizedTextStyle.copy(
+                        fontSize = resizedTextStyle.fontSize * 0.95f
+                    )
+                }
+            } else {
+                shouldDraw = true
+            }
+        }
+    )
 }
 
