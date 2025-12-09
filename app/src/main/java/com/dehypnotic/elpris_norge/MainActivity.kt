@@ -316,17 +316,19 @@ fun PriceChart(
 
 
 
-    val maxPriceForScaling = remember(pricesInfo) {
+    val maxPriceForScaling = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.originalPrice } ?: 1.0 }
 
-        pricesInfo.maxOfOrNull { it.originalPrice } ?: 1.0
-
-    }
+    val minOriginalPrice = remember(pricesInfo) { pricesInfo.filter { it.originalPrice >= 0 }.minOfOrNull { it.originalPrice } ?: 0.0 }
 
     val minPrice = remember(pricesInfo) { pricesInfo.filter { it.effectivePrice >= 0 }.minOfOrNull { it.effectivePrice } ?: 0.0 }
 
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
 
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
+
+
+
+    val stromstotteThreshold = if (zone != "NO4") STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
 
 
 
@@ -374,9 +376,13 @@ fun PriceChart(
 
                         maxPriceForScaling = maxPriceForScaling,
 
+                        minOriginalPrice = minOriginalPrice,
+
                         minPrice = minPrice,
 
                         maxEffectivePrice = maxEffectivePrice,
+
+                        stromstotteThreshold = stromstotteThreshold,
 
                         selectedDate = selectedDate,
 
@@ -414,9 +420,13 @@ fun ChartBar(
 
     maxPriceForScaling: Double,
 
+    minOriginalPrice: Double,
+
     minPrice: Double,
 
     maxEffectivePrice: Double,
+
+    stromstotteThreshold: Double,
 
     selectedDate: LocalDate,
 
@@ -478,9 +488,13 @@ fun ChartBar(
 
             maxPriceForScaling = maxPriceForScaling,
 
+            minOriginalPrice = minOriginalPrice,
+
             minPrice = minPrice,
 
             maxEffectivePrice = maxEffectivePrice,
+
+            stromstotteThreshold = stromstotteThreshold,
 
             priceText = priceText,
 
@@ -498,122 +512,462 @@ fun ChartBar(
 
 @Composable
 
+
+
 fun RowScope.DefaultBar(
+
+
 
     priceInfo: PriceInfo,
 
+
+
     maxPriceForScaling: Double,
+
+
+
+    minOriginalPrice: Double,
+
+
 
     minPrice: Double,
 
+
+
     maxEffectivePrice: Double,
+
+
+
+    stromstotteThreshold: Double,
+
+
 
     priceText: String,
 
+
+
     isNorgespris: Boolean,
+
+
 
     isStromstotte: Boolean
 
+
+
 ) {
 
+
+
     val priceInOre = priceInfo.effectivePrice
+
+
 
     val originalPrice = priceInfo.originalPrice
 
 
 
+
+
+
+
     val colorRange = maxEffectivePrice - minPrice
+
+
 
     val colorFraction = if (colorRange > 0) {
 
+
+
         ((priceInOre - minPrice) / colorRange).toFloat().coerceIn(0f, 1f)
+
+
 
     } else {
 
+
+
         0f
 
+
+
     }
+
+
+
+
 
 
 
     val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
 
+
+
     val darkerBarColor = baseBarColor.copy(red = baseBarColor.red * 0.8f, green = baseBarColor.green * 0.8f, blue = baseBarColor.blue * 0.8f)
+
+
+
+
 
 
 
     val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
 
+
+
     val textColor = if (luminance > 0.5) Color.Black else Color.White
 
 
 
-    val fullBarFraction = if (maxPriceForScaling > 0) (originalPrice / maxPriceForScaling).toFloat().coerceIn(0f, 1f) else 0f
 
 
 
-    Box(
 
-        modifier = Modifier
-
-            .fillMaxHeight()
-
-            .fillMaxWidth(fullBarFraction),
-
-        contentAlignment = Alignment.CenterStart
-
-    ) {
-
-        Row(modifier = Modifier.fillMaxSize()) {
-
-            if (isNorgespris && originalPrice > NORGESPRIS_MIDPOINT_ORE) {
-
-                val baseFraction = if (originalPrice > 0) (NORGESPRIS_MIDPOINT_ORE / originalPrice).toFloat() else 0f
-
-                val extraFraction = 1f - baseFraction
+    val minBarUiFraction = 0.14f
 
 
 
-                Box(modifier = Modifier.fillMaxHeight().weight(baseFraction).background(baseBarColor))
-
-                Box(modifier = Modifier.fillMaxHeight().weight(extraFraction).background(darkerBarColor))
 
 
 
-            } else if (isStromstotte && priceInOre < originalPrice) {
 
-                val effectiveFraction = if (originalPrice > 0) (priceInOre / originalPrice).toFloat() else 0f
-
-                val subsidizedFraction = 1f - effectiveFraction
+    val fullBarFraction = when {
 
 
 
-                Box(modifier = Modifier.fillMaxHeight().weight(effectiveFraction).background(baseBarColor))
+        isNorgespris -> {
 
-                Box(modifier = Modifier.fillMaxHeight().weight(subsidizedFraction).background(darkerBarColor))
+
+
+            if (maxPriceForScaling > 0) (originalPrice / maxPriceForScaling).toFloat().coerceIn(0f, 1f) else 0f
+
+
+
+        }
+
+
+
+        isStromstotte -> {
+
+
+
+            val range = maxEffectivePrice - minPrice
+
+
+
+            val fraction = if (range > 0) {
+
+
+
+                val scaledFraction = ((priceInOre - minPrice) / range).toFloat()
+
+
+
+                minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
 
 
 
             } else {
 
-                Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
+
+
+                if (priceInOre > 0) 0.5f else 0f
+
+
 
             }
 
+
+
+            fraction.coerceIn(0f, 1f)
+
+
+
         }
 
-        Text(
 
-            text = priceText,
 
-            style = MaterialTheme.typography.bodySmall,
+        else -> { // Default view
 
-            color = textColor,
 
-            modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart)
 
-        )
+            val maxOriginalPrice = maxPriceForScaling
+
+
+
+            val range = maxOriginalPrice - minOriginalPrice
+
+
+
+            val fraction = if (range > 0) {
+
+
+
+                val scaledFraction = ((originalPrice - minOriginalPrice) / range).toFloat()
+
+
+
+                minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+
+
+
+            } else {
+
+
+
+                if (originalPrice > 0) 0.5f else 0f
+
+
+
+            }
+
+
+
+            fraction.coerceIn(0f, 1f)
+
+
+
+        }
+
+
 
     }
+
+
+
+
+
+
+
+    Box(
+
+
+
+        modifier = Modifier
+
+
+
+            .fillMaxHeight()
+
+
+
+            .fillMaxWidth(fullBarFraction),
+
+
+
+        contentAlignment = Alignment.CenterStart
+
+
+
+    ) {
+
+
+
+        Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+
+
+
+            when {
+
+
+
+                isNorgespris && originalPrice > NORGESPRIS_MIDPOINT_ORE -> {
+
+
+
+                    val baseFraction = if (originalPrice > 0) (NORGESPRIS_MIDPOINT_ORE / originalPrice).toFloat() else 0f
+
+
+
+                    val extraFraction = 1f - baseFraction
+
+
+
+                    val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%.0f", originalPrice - NORGESPRIS_MIDPOINT_ORE)
+
+
+
+                    val darkerTextColor = Color.White // Assuming white is readable on the darker color
+
+
+
+
+
+
+
+                    Box(
+
+
+
+                        modifier = Modifier.fillMaxHeight().weight(baseFraction).background(baseBarColor),
+
+
+
+                        contentAlignment = Alignment.CenterStart
+
+
+
+                    ) {
+
+
+
+                        Text("0", style = MaterialTheme.typography.bodySmall, color = textColor, modifier = Modifier.padding(start = 4.dp))
+
+
+
+                    }
+
+
+
+                    Box(
+
+
+
+                        modifier = Modifier.fillMaxHeight().weight(extraFraction).background(darkerBarColor),
+
+
+
+                        contentAlignment = Alignment.CenterStart
+
+
+
+                    ) {
+
+
+
+                        Text(textAbove, style = MaterialTheme.typography.bodySmall, color = darkerTextColor, modifier = Modifier.padding(start = 4.dp))
+
+
+
+                    }
+
+
+
+                }
+
+
+
+                isNorgespris -> { // and originalPrice <= NORGESPRIS_MIDPOINT_ORE
+
+
+
+                    val textBelow = String.format(Locale.forLanguageTag("no-NO"), "%.0f", NORGESPRIS_MIDPOINT_ORE - originalPrice)
+
+
+
+                    Box(
+
+
+
+                        modifier = Modifier.fillMaxSize().background(baseBarColor),
+
+
+
+                        contentAlignment = Alignment.CenterStart
+
+
+
+                    ) {
+
+
+
+                        Text(textBelow, style = MaterialTheme.typography.bodySmall, color = textColor, modifier = Modifier.padding(start = 4.dp))
+
+
+
+                    }
+
+
+
+                }
+
+
+
+                isStromstotte && priceInOre > stromstotteThreshold -> {
+
+
+
+                    val baseFraction = if (priceInOre > 0) (stromstotteThreshold / priceInOre).toFloat() else 0f
+
+
+
+                    val extraFraction = 1f - baseFraction
+
+
+
+                    Box(modifier = Modifier.fillMaxHeight().weight(baseFraction).background(baseBarColor))
+
+
+
+                    Box(modifier = Modifier.fillMaxHeight().weight(extraFraction).background(darkerBarColor))
+
+
+
+                }
+
+
+
+                else -> {
+
+
+
+                    Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
+
+
+
+                }
+
+
+
+            }
+
+
+
+        }
+
+
+
+
+
+
+
+        // Default text overlay for modes that don't have special text handling
+
+
+
+        if (!isNorgespris) {
+
+
+
+            Text(
+
+
+
+                text = priceText,
+
+
+
+                style = MaterialTheme.typography.bodySmall,
+
+
+
+                color = textColor,
+
+
+
+                modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart)
+
+
+
+            )
+
+
+
+        }
+
+
+
+    }
+
+
 
 }
