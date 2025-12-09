@@ -348,7 +348,7 @@ fun PriceChart(
     val averagePriceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", averagePrice)
     val headerText = when {
         isStromstotte -> "Din pris etter strømstøtte for $dateText. Snitt: $averagePriceText"
-        isNorgespris -> "Prisavvik fra ${NORGESPRIS_MIDPOINT_ORE.toInt()} øre for $dateText. Under: $percentBelow%, Over: $percentAbove%"
+        isNorgespris -> "Prisavvik fra Norgespris for $dateText. Under: $percentBelow%, Over: $percentAbove%"
         zone != "NO4" -> "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
         else -> "Priser i øre/kWh for $dateText. Snitt: $averagePriceText"
     }
