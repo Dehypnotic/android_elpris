@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,16 +15,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.dehypnotic.elpris_norge.network.PricePoint
 import com.dehypnotic.elpris_norge.network.fetchPrices
@@ -191,7 +185,7 @@ fun BottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .padding(horizontal = 16.dp)
                 .navigationBarsPadding(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -355,27 +349,24 @@ fun PriceChart(
 
     val currentHour = LocalTime.now().hour
 
-    Column(modifier = modifier.padding(horizontal = 16.dp).fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         Text(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
-            val barHeight = maxHeight / 24
-            LazyColumn {
-                items(pricesInfo) { priceInfo ->
-                    ChartBar(
-                        priceInfo = priceInfo,
-                        maxPriceForScaling = maxPriceForScaling,
-                        minOriginalPrice = minOriginalPrice,
-                        minPrice = minPrice,
-                        maxEffectivePrice = maxEffectivePrice,
-                        stromstotteThreshold = stromstotteThreshold,
-                        selectedDate = selectedDate,
-                        currentHour = currentHour,
-                        isNorgespris = isNorgespris,
-                        isStromstotte = isStromstotte,
-                        maxAbsoluteDeviation = maxAbsoluteDeviation,
-                        modifier = Modifier.height(barHeight)
-                    )
-                }
+        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            items(pricesInfo) { priceInfo ->
+                ChartBar(
+                    priceInfo = priceInfo,
+                    maxPriceForScaling = maxPriceForScaling,
+                    minOriginalPrice = minOriginalPrice,
+                    minPrice = minPrice,
+                    maxEffectivePrice = maxEffectivePrice,
+                    stromstotteThreshold = stromstotteThreshold,
+                    selectedDate = selectedDate,
+                    currentHour = currentHour,
+                    isNorgespris = isNorgespris,
+                    isStromstotte = isStromstotte,
+                    maxAbsoluteDeviation = maxAbsoluteDeviation,
+                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                )
             }
         }
     }
@@ -435,7 +426,7 @@ fun ChartBar(
 }
 
 @Composable
-fun RowScope.DefaultBar(
+fun DefaultBar(
     priceInfo: PriceInfo,
     maxPriceForScaling: Double,
     minOriginalPrice: Double,
