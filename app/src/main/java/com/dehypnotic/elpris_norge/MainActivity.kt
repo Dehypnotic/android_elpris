@@ -286,16 +286,13 @@ fun PriceChart(
         }
     }
 
-    val (maxPriceBelowMidpoint, maxPriceAboveMidpoint) = remember(pricesInfo, isNorgespris) {
+    val maxAbsoluteDeviation = remember(pricesInfo, isNorgespris) {
         if (isNorgespris) {
-            val pricesAbove = pricesInfo.map { it.originalPrice }.filter { it > NORGESPRIS_MIDPOINT_ORE }
-            val pricesBelow = pricesInfo.map { it.originalPrice }.filter { it < NORGESPRIS_MIDPOINT_ORE }
-
-            val maxAbove = pricesAbove.maxOfOrNull { it - NORGESPRIS_MIDPOINT_ORE } ?: 1.0
-            val maxBelow = pricesBelow.maxOfOrNull { NORGESPRIS_MIDPOINT_ORE - it } ?: 1.0
-            Pair(maxBelow, maxAbove)
+            pricesInfo
+                .map { abs(it.originalPrice - NORGESPRIS_MIDPOINT_ORE) }
+                .maxOfOrNull { it } ?: 1.0
         } else {
-            Pair(1.0, 1.0) // Default values, not used when not in Norgespris mode
+            1.0 // Default value, not used when not in Norgespris mode
         }
     }
 
@@ -337,8 +334,7 @@ fun PriceChart(
                         currentHour = currentHour,
                         isNorgespris = isNorgespris,
                         isStromstotte = isStromstotte,
-                        maxPriceBelowMidpoint = maxPriceBelowMidpoint,
-                        maxPriceAboveMidpoint = maxPriceAboveMidpoint,
+                        maxAbsoluteDeviation = maxAbsoluteDeviation,
                         modifier = Modifier.height(barHeight)
                     )
                 }
@@ -361,8 +357,7 @@ fun ChartBar(
     currentHour: Int,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
-    maxPriceBelowMidpoint: Double,
-    maxPriceAboveMidpoint: Double,
+    maxAbsoluteDeviation: Double,
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
@@ -396,8 +391,7 @@ fun ChartBar(
             priceText = priceText,
             isNorgespris = isNorgespris,
             isStromstotte = isStromstotte,
-            maxPriceBelowMidpoint = maxPriceBelowMidpoint,
-            maxPriceAboveMidpoint = maxPriceAboveMidpoint
+            maxAbsoluteDeviation = maxAbsoluteDeviation
         )
     }
 }
@@ -413,15 +407,14 @@ fun RowScope.DefaultBar(
     priceText: String,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
-    maxPriceBelowMidpoint: Double,
-    maxPriceAboveMidpoint: Double
+    maxAbsoluteDeviation: Double
 ) {
     if (isNorgespris) {
         val priceBelowMidpointValue = max(0.0, NORGESPRIS_MIDPOINT_ORE - priceInfo.originalPrice)
         val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - NORGESPRIS_MIDPOINT_ORE)
 
-        val belowFraction = if (maxPriceBelowMidpoint > 0) (priceBelowMidpointValue / maxPriceBelowMidpoint).toFloat() else 0f
-        val aboveFraction = if (maxPriceAboveMidpoint > 0) (priceAboveMidpointValue / maxPriceAboveMidpoint).toFloat() else 0f
+        val belowFraction = if (maxAbsoluteDeviation > 0) (priceBelowMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
+        val aboveFraction = if (maxAbsoluteDeviation > 0) (priceAboveMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
 
         val colorRange = max(1.0, maxPriceForScaling) - minOriginalPrice
         val colorFraction = if (colorRange > 0) {
@@ -529,14 +522,26 @@ fun RowScope.DefaultBar(
             contentAlignment = Alignment.CenterStart
         ) {
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                if (isStromstotte && priceInOre > stromstotteThreshold) {
-                    val baseFraction = if (priceInOre > 0) (stromstotteThreshold / priceInOre).toFloat() else 0f
-                    val extraFraction = 1f - baseFraction
-                    Box(modifier = Modifier.fillMaxHeight().weight(baseFraction).background(baseBarColor))
-                    Box(modifier = Modifier.fillMaxHeight().weight(extraFraction).background(darkerBarColor))
+            if (isStromstotte && priceInOre > stromstotteThreshold) {
+                val range = maxEffectivePrice - minPrice
+                val thresholdBarFraction = if (range > 0) {
+                    val scaledFraction = ((stromstotteThreshold - minPrice) / range).toFloat()
+                    (minBarUiFraction + (1f - minBarUiFraction) * scaledFraction).coerceIn(0f, 1f)
+                } else {
+                    if (stromstotteThreshold > 0) 0.5f else 0f
+                }
+
+                val baseProportion = if (fullBarFraction > 0f) (thresholdBarFraction / fullBarFraction) else 0f
+
+                if (baseProportion < 1f) {
+                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(baseProportion).background(baseBarColor))
+                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth().background(darkerBarColor))
                 } else {
                     Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
                 }
+            } else {
+                Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
+            }
             }
 
             Text(
