@@ -62,11 +62,16 @@ fun PriceScreen(modifier: Modifier = Modifier) {
     var prices by remember { mutableStateOf<List<PricePoint>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var isNorgespris by remember { mutableStateOf(false) }
-    var isStromstotte by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+
+    var isNorgespris by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_norgespris", false))
+    }
+    var isStromstotte by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_stromstotte", false))
+    }
 
     var selectedZone by remember {
         mutableStateOf(sharedPrefs.getString("selected_zone", "NO3") ?: "NO3")
@@ -113,10 +118,18 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                 onNorgesprisChange = {
                     isNorgespris = it
                     if (it) isStromstotte = false
+                    sharedPrefs.edit {
+                        putBoolean("is_norgespris", isNorgespris)
+                        putBoolean("is_stromstotte", isStromstotte)
+                    }
                 },
                 onStromstotteChange = {
                     isStromstotte = it
                     if (it) isNorgespris = false
+                    sharedPrefs.edit {
+                        putBoolean("is_stromstotte", isStromstotte)
+                        putBoolean("is_norgespris", isNorgespris)
+                    }
                 }
             )
         }
@@ -302,6 +315,31 @@ fun PriceChart(
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
+    val (percentBelow, percentAbove) = remember(pricesInfo, isNorgespris) {
+        if (isNorgespris && pricesInfo.isNotEmpty()) {
+            val sumBelow = pricesInfo
+                .map { NORGESPRIS_MIDPOINT_ORE - it.originalPrice }
+                .filter { it > 0 }
+                .sum()
+
+            val sumAbove = pricesInfo
+                .map { it.originalPrice - NORGESPRIS_MIDPOINT_ORE }
+                .filter { it > 0 }
+                .sum()
+
+            val totalDeviation = sumBelow + sumAbove
+            if (totalDeviation > 0) {
+                val below = (sumBelow / totalDeviation * 100).toInt()
+                val above = 100 - below
+                Pair(below, above)
+            } else {
+                Pair(0, 0)
+            }
+        } else {
+            Pair(0, 0)
+        }
+    }
+
     val stromstotteThreshold = if (zone != "NO4") STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
@@ -310,7 +348,7 @@ fun PriceChart(
     val averagePriceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", averagePrice)
     val headerText = when {
         isStromstotte -> "Din pris etter strømstøtte for $dateText. Snitt: $averagePriceText"
-        isNorgespris -> "Prisavvik fra ${NORGESPRIS_MIDPOINT_ORE.toInt()} øre for $dateText"
+        isNorgespris -> "Prisavvik fra ${NORGESPRIS_MIDPOINT_ORE.toInt()} øre for $dateText. Under: $percentBelow%, Over: $percentAbove%"
         zone != "NO4" -> "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
         else -> "Priser i øre/kWh for $dateText. Snitt: $averagePriceText"
     }
