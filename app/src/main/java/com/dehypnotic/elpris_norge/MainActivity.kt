@@ -43,19 +43,47 @@ private const val STROMSTOTTE_THRESHOLD_INCL_VAT_ORE = STROMSTOTTE_THRESHOLD_EX_
 private const val STROMSTOTTE_SUBSIDY_PERCENTAGE = 0.90
 
 class MainActivity : ComponentActivity() {
+    private val refreshTrigger = mutableStateOf(0)
+    private var lastPauseTime: Long = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             Android_elprisTheme {
-                PriceScreen(modifier = Modifier.fillMaxSize())
+                PriceScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    refreshTrigger = refreshTrigger.value
+                )
             }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        lastPauseTime = System.currentTimeMillis()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (lastPauseTime == 0L) { // App is starting, no need to refresh.
+            return
+        }
+
+        val currentTime = System.currentTimeMillis()
+        val hourInMillis = 60 * 60 * 1000
+
+        val lastCal = java.util.Calendar.getInstance().apply { timeInMillis = lastPauseTime }
+        val currentCal = java.util.Calendar.getInstance().apply { timeInMillis = currentTime }
+
+        if (currentTime - lastPauseTime > hourInMillis || lastCal.get(java.util.Calendar.HOUR_OF_DAY) != currentCal.get(java.util.Calendar.HOUR_OF_DAY)) {
+            refreshTrigger.value++
         }
     }
 }
 
 @Composable
-fun PriceScreen(modifier: Modifier = Modifier) {
+fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     var prices by remember { mutableStateOf<List<PricePoint>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -75,7 +103,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
     }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
-    LaunchedEffect(selectedZone, selectedDate) {
+    LaunchedEffect(selectedZone, selectedDate, refreshTrigger) {
         isLoading = true
         error = null
         prices = emptyList()
