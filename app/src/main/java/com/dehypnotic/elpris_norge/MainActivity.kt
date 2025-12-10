@@ -502,7 +502,7 @@ fun DefaultBar(
                         .background(baseBarColor),
                     contentAlignment = Alignment.CenterEnd
                 ) {
-                    val textBelow = String.format(Locale.forLanguageTag("no-NO"), "%.0f", priceBelowMidpointValue)
+                    val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%.0f", priceBelowMidpointValue)
                     if (priceBelowMidpointValue > 0) {
                         Text(
                             text = textBelow,
