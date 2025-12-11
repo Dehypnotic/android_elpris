@@ -36,6 +36,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 private const val NORGESPRIS_MIDPOINT_ORE = 50.0
 private const val STROMSTOTTE_THRESHOLD_EX_VAT_ORE = 75.0
@@ -507,23 +508,39 @@ fun DefaultBar(
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // Left bar (below midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(belowFraction)
-                        .background(baseBarColor),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%.0f", priceBelowMidpointValue)
-                    if (priceBelowMidpointValue > 0) {
-                        Text(
-                            text = textBelow,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor,
-                            modifier = Modifier.padding(end = 4.dp),
-                            textAlign = TextAlign.End,
-                            softWrap = false
-                        )
+                if (priceInfo.originalPrice < NORGESPRIS_MIDPOINT_ORE) {
+                    val roundedBelow = priceBelowMidpointValue.roundToInt()
+                    if (roundedBelow > 0) {
+                        val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", roundedBelow)
+                        val showOutside = roundedBelow <= 2
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(belowFraction)
+                                .background(baseBarColor),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            if (!showOutside) {
+                                Text(
+                                    text = textBelow,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor,
+                                    modifier = Modifier.padding(end = 4.dp),
+                                    textAlign = TextAlign.End,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                        if (showOutside) {
+                            Text(
+                                text = textBelow,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(end = 4.dp),
+                                softWrap = false,
+                            )
+                        }
                     }
                 }
             }
@@ -533,20 +550,35 @@ fun DefaultBar(
 
             // Right bar (above midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(aboveFraction)
-                        .background(darkerBarColor),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%.0f", priceAboveMidpointValue)
-                    if (priceAboveMidpointValue > 0) {
+                if (priceInfo.originalPrice >= NORGESPRIS_MIDPOINT_ORE) {
+                    val roundedAbove = priceAboveMidpointValue.roundToInt()
+                    val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", roundedAbove)
+                    val showOutside = roundedAbove <= 2
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(aboveFraction)
+                            .background(darkerBarColor),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (!showOutside) {
+                            Text(
+                                text = textAbove,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(start = 4.dp),
+                                softWrap = false
+                            )
+                        }
+                    }
+                    if (showOutside) {
                         Text(
                             text = textAbove,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White,
-                            modifier = Modifier.padding(start = 4.dp)
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 4.dp),
+                            softWrap = false,
                         )
                     }
                 }
