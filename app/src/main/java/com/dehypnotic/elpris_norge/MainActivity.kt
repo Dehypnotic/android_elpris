@@ -28,6 +28,7 @@ import com.dehypnotic.elpris_norge.network.PricePoint
 import com.dehypnotic.elpris_norge.network.fetchPrices
 import com.dehypnotic.elpris_norge.ui.theme.Android_elprisTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
@@ -87,6 +88,14 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     var prices by remember { mutableStateOf<List<PricePoint>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var currentTime by remember { mutableStateOf(LocalTime.now()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L) // 1 minute
+            currentTime = LocalTime.now()
+        }
+    }
 
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -171,6 +180,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
             DateSelector(
                 selectedDate = selectedDate,
                 onDateSelected = { selectedDate = it },
+                currentTime = currentTime,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
@@ -192,7 +202,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                             zone = selectedZone,
                             selectedDate = selectedDate,
                             isNorgespris = isNorgespris,
-                            isStromstotte = isStromstotte
+                            isStromstotte = isStromstotte,
+                            currentTime = currentTime
                         )
                     }
                 }
@@ -256,9 +267,9 @@ fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifie
 }
 
 @Composable
-fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, currentTime: LocalTime, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val isTomorrowAvailable = LocalTime.now().hour >= 13
+    val isTomorrowAvailable = currentTime.hour >= 13
     val today = LocalDate.now()
     val yesterday = today.minusDays(1)
     val tomorrow = today.plusDays(1)
@@ -301,6 +312,7 @@ fun PriceChart(
     selectedDate: LocalDate,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
+    currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
     val pricesInfo = remember(prices, zone, isStromstotte) {
@@ -378,7 +390,7 @@ fun PriceChart(
         else -> "Priser i øre/kWh for $dateText. Snitt: $averagePriceText"
     }
 
-    val currentHour = LocalTime.now().hour
+    val currentHour = currentTime.hour
 
     Column(modifier = modifier.fillMaxSize()) {
         AutoResizeText(
@@ -509,7 +521,8 @@ fun DefaultBar(
                             style = MaterialTheme.typography.bodySmall,
                             color = textColor,
                             modifier = Modifier.padding(end = 4.dp),
-                            textAlign = TextAlign.End
+                            textAlign = TextAlign.End,
+                            softWrap = false
                         )
                     }
                 }
