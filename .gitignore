@@ -95,3 +95,6 @@ hs_err_pid1050904.log
 hs_err_pid1057436.log
 replay_pid1050904.log
 replay_pid1057436.log
+.idea/deploymentTargetSelector.xml
+app/build.gradle.kts
+gradle/libs.versions.toml
