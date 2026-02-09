@@ -678,7 +678,7 @@ fun DefaultBar(
             contentAlignment = Alignment.CenterStart
         ) {
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            if (isStromstotte && priceInOre > stromstotteThreshold) {
+            if (isStromstotte && priceInOre > stromstotteThreshold && minPrice < stromstotteThreshold) {
                 val range = maxEffectivePrice - minPrice
                 val thresholdBarFraction = if (range > 0) {
                     val scaledFraction = ((stromstotteThreshold - minPrice) / range).toFloat()
