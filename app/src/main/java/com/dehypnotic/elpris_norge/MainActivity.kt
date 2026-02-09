@@ -93,7 +93,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(60_000L) // 1 minute
+            delay(60_000L) // 1 minute
             currentTime = LocalTime.now()
         }
     }
@@ -107,11 +107,27 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     var isStromstotte by remember {
         mutableStateOf(sharedPrefs.getBoolean("is_stromstotte", false))
     }
-
     var selectedZone by remember {
         mutableStateOf(sharedPrefs.getString("selected_zone", "NO3") ?: "NO3")
     }
+    var isMva by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_mva", selectedZone != "NO4"))
+    }
+
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+
+    // Logic for MVA toggle state
+    LaunchedEffect(isNorgespris, isStromstotte, selectedZone) {
+        if (selectedZone == "NO4") {
+            isMva = false
+        } else if (isNorgespris || isStromstotte) {
+            isMva = true
+        }
+        // Save state
+        sharedPrefs.edit {
+            putBoolean("is_mva", isMva)
+        }
+    }
 
     LaunchedEffect(selectedZone, selectedDate, refreshTrigger) {
         isLoading = true
@@ -150,6 +166,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
             BottomBar(
                 isNorgespris = isNorgespris,
                 isStromstotte = isStromstotte,
+                isMva = isMva,
+                selectedZone = selectedZone,
                 onNorgesprisChange = {
                     isNorgespris = it
                     if (it) isStromstotte = false
@@ -164,6 +182,12 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                     sharedPrefs.edit {
                         putBoolean("is_stromstotte", isStromstotte)
                         putBoolean("is_norgespris", isNorgespris)
+                    }
+                },
+                onMvaChange = {
+                    isMva = it
+                    sharedPrefs.edit {
+                        putBoolean("is_mva", isMva)
                     }
                 }
             )
@@ -200,10 +224,10 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                     else -> {
                         PriceChart(
                             prices = prices,
-                            zone = selectedZone,
                             selectedDate = selectedDate,
                             isNorgespris = isNorgespris,
                             isStromstotte = isStromstotte,
+                            isMva = isMva,
                             currentTime = currentTime
                         )
                     }
@@ -217,8 +241,11 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 fun BottomBar(
     isNorgespris: Boolean,
     isStromstotte: Boolean,
+    isMva: Boolean,
+    selectedZone: String,
     onNorgesprisChange: (Boolean) -> Unit,
-    onStromstotteChange: (Boolean) -> Unit
+    onStromstotteChange: (Boolean) -> Unit,
+    onMvaChange: (Boolean) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -235,13 +262,22 @@ fun BottomBar(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Norgespris", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(4.dp))
                 Switch(checked = isNorgespris, onCheckedChange = onNorgesprisChange)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Strømstøtte", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.width(8.dp))
+                Text("Støtte", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Spacer(Modifier.width(4.dp))
                 Switch(checked = isStromstotte, onCheckedChange = onStromstotteChange)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Mva", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Spacer(Modifier.width(4.dp))
+                Switch(
+                    checked = isMva,
+                    onCheckedChange = onMvaChange,
+                    enabled = !isNorgespris && !isStromstotte && selectedZone != "NO4"
+                )
             }
         }
     }
@@ -309,21 +345,21 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, c
 @Composable
 fun PriceChart(
     prices: List<PricePoint>,
-    zone: String,
     selectedDate: LocalDate,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
+    isMva: Boolean,
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val pricesInfo = remember(prices, zone, isStromstotte) {
+    val pricesInfo = remember(prices, isMva, isStromstotte) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.NOK_per_kWh
-            val originalPriceInclVat = if (zone != "NO4") priceExVat * STROMSTOTTE_VAT_MULTIPLIER else priceExVat
-            val originalPriceInOre = originalPriceInclVat * 100
+            val originalPrice = if (isMva) priceExVat * STROMSTOTTE_VAT_MULTIPLIER else priceExVat
+            val originalPriceInOre = originalPrice * 100
 
             val effectivePrice = if (isStromstotte) {
-                val threshold = if (zone != "NO4") STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
+                val threshold = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
                 if (originalPriceInOre > threshold) {
                     val subsidizedAmount = (originalPriceInOre - threshold) * STROMSTOTTE_SUBSIDY_PERCENTAGE
                     (originalPriceInOre - subsidizedAmount)
@@ -378,7 +414,7 @@ fun PriceChart(
         }
     }
 
-    val stromstotteThreshold = if (zone != "NO4") STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
+    val stromstotteThreshold = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
     val dateText = selectedDate.format(dateFormatter)
@@ -387,8 +423,8 @@ fun PriceChart(
     val headerText = when {
         isStromstotte -> "Din pris etter strømstøtte for $dateText. Snitt: $averagePriceText"
         isNorgespris -> "Prisavvik fra Norgespris for $dateText. Under: $percentBelow%, Over: $percentAbove%"
-        zone != "NO4" -> "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
-        else -> "Priser i øre/kWh for $dateText. Snitt: $averagePriceText"
+        isMva -> "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
+        else -> "Priser i øre/kWh eks. mva for $dateText. Snitt: $averagePriceText"
     }
 
     val currentHour = currentTime.hour
