@@ -101,7 +101,7 @@ fun PriceScreen(modifier: Modifier = Modifier) {
                     selectedDate.isAfter(today.plusDays(1)) ->
                         "Fremtidige priser strekker seg kun til påfølgende dag etter publisering tidligst kl 13"
                     selectedDate.isEqual(today.plusDays(1)) ->
-                        "Prisene for i morgen er ikke klare ennå. De publiseres vanligvis etter kl. 13."
+                        "Prisene for i morgen er ikke klare ennå. De publiserer etter kl. 13."
                     else ->
                         "Ingen priser funnet for denne dagen."
                 }
