@@ -39,10 +39,10 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private const val NORGESPRIS_MIDPOINT_ORE = 50.0
 private const val STROMSTOTTE_THRESHOLD_EX_VAT_ORE = 75.0
 private const val STROMSTOTTE_VAT_MULTIPLIER = 1.25
-private const val NORGESPRIS_MIDPOINT_INCL_VAT_ORE = NORGESPRIS_MIDPOINT_ORE * STROMSTOTTE_VAT_MULTIPLIER
+private const val NORGESPRIS_MIDPOINT_INCL_VAT_ORE = 50.0
+private const val NORGESPRIS_MIDPOINT_EX_VAT_ORE = NORGESPRIS_MIDPOINT_INCL_VAT_ORE / STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_THRESHOLD_INCL_VAT_ORE = STROMSTOTTE_THRESHOLD_EX_VAT_ORE * STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_SUBSIDY_PERCENTAGE = 0.90
 
@@ -357,7 +357,7 @@ fun PriceChart(
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_ORE
+    val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
 
     val pricesInfo = remember(prices, isMva, isStromstotte) {
         prices.map { pricePoint ->
@@ -532,7 +532,7 @@ fun DefaultBar(
 ) {
     if (isNorgespris) {
         val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1 // Simple check if VAT is added
-        val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_ORE
+        val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
 
         val priceBelowMidpointValue = max(0.0, effectiveMidpoint - priceInfo.originalPrice)
         val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - effectiveMidpoint)
@@ -744,4 +744,3 @@ fun AutoResizeText(
         }
     )
 }
-
