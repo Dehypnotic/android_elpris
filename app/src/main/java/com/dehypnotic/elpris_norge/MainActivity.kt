@@ -2,6 +2,7 @@ package com.dehypnotic.elpris_norge
 
 import android.app.DatePickerDialog
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.widget.DatePicker
 import androidx.activity.ComponentActivity
@@ -41,6 +42,7 @@ import kotlin.math.roundToInt
 private const val NORGESPRIS_MIDPOINT_ORE = 50.0
 private const val STROMSTOTTE_THRESHOLD_EX_VAT_ORE = 75.0
 private const val STROMSTOTTE_VAT_MULTIPLIER = 1.25
+private const val NORGESPRIS_MIDPOINT_INCL_VAT_ORE = NORGESPRIS_MIDPOINT_ORE * STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_THRESHOLD_INCL_VAT_ORE = STROMSTOTTE_THRESHOLD_EX_VAT_ORE * STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_SUBSIDY_PERCENTAGE = 0.90
 
@@ -50,7 +52,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Bruk versjonssjekk for å unngå avviklede API-er for heldekkende skjerm på Android 15+
+        if (Build.VERSION.SDK_INT < 35) {
+            enableEdgeToEdge()
+        }
         setContent {
             Android_elprisTheme {
                 PriceScreen(
@@ -352,6 +357,8 @@ fun PriceChart(
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
+    val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_ORE
+
     val pricesInfo = remember(prices, isMva, isStromstotte) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.NOK_per_kWh
@@ -373,10 +380,10 @@ fun PriceChart(
         }
     }
 
-    val maxAbsoluteDeviation = remember(pricesInfo, isNorgespris) {
+    val maxAbsoluteDeviation = remember(pricesInfo, isNorgespris, effectiveMidpoint) {
         if (isNorgespris) {
             pricesInfo
-                .map { abs(it.originalPrice - NORGESPRIS_MIDPOINT_ORE) }
+                .map { abs(it.originalPrice - effectiveMidpoint) }
                 .maxOfOrNull { it } ?: 1.0
         } else {
             1.0 // Default value, not used when not in Norgespris mode
@@ -389,15 +396,15 @@ fun PriceChart(
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
-    val (percentBelow, percentAbove) = remember(pricesInfo, isNorgespris) {
+    val (percentBelow, percentAbove) = remember(pricesInfo, isNorgespris, effectiveMidpoint) {
         if (isNorgespris && pricesInfo.isNotEmpty()) {
             val sumBelow = pricesInfo
-                .map { NORGESPRIS_MIDPOINT_ORE - it.originalPrice }
+                .map { effectiveMidpoint - it.originalPrice }
                 .filter { it > 0 }
                 .sum()
 
             val sumAbove = pricesInfo
-                .map { it.originalPrice - NORGESPRIS_MIDPOINT_ORE }
+                .map { it.originalPrice - effectiveMidpoint }
                 .filter { it > 0 }
                 .sum()
 
@@ -524,8 +531,11 @@ fun DefaultBar(
     maxAbsoluteDeviation: Double
 ) {
     if (isNorgespris) {
-        val priceBelowMidpointValue = max(0.0, NORGESPRIS_MIDPOINT_ORE - priceInfo.originalPrice)
-        val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - NORGESPRIS_MIDPOINT_ORE)
+        val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1 // Simple check if VAT is added
+        val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_ORE
+
+        val priceBelowMidpointValue = max(0.0, effectiveMidpoint - priceInfo.originalPrice)
+        val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - effectiveMidpoint)
 
         val belowFraction = if (maxAbsoluteDeviation > 0) (priceBelowMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
         val aboveFraction = if (maxAbsoluteDeviation > 0) (priceAboveMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
@@ -544,7 +554,7 @@ fun DefaultBar(
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // Left bar (below midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
-                if (priceInfo.originalPrice < NORGESPRIS_MIDPOINT_ORE) {
+                if (priceInfo.originalPrice < effectiveMidpoint) {
                     val roundedBelow = priceBelowMidpointValue.roundToInt()
                     if (roundedBelow > 0) {
                         val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", roundedBelow)
@@ -586,7 +596,7 @@ fun DefaultBar(
 
             // Right bar (above midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                if (priceInfo.originalPrice >= NORGESPRIS_MIDPOINT_ORE) {
+                if (priceInfo.originalPrice >= effectiveMidpoint) {
                     val roundedAbove = priceAboveMidpointValue.roundToInt()
                     val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", roundedAbove)
                     val showOutside = roundedAbove <= 2
