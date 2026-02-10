@@ -547,9 +547,9 @@ fun DefaultBar(
             0f
         }
         val baseBarColor = if (priceInfo.originalPrice < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
-        val darkerBarColor = baseBarColor.copy(red = baseBarColor.red * 0.8f, green = baseBarColor.green * 0.8f, blue = baseBarColor.blue * 0.8f)
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
-        val textColor = if (luminance > 0.5) Color.Black else Color.White
+        val textColorInside = if (luminance > 0.5) Color.Black else Color.White
+        val textColorOutside = MaterialTheme.colorScheme.onSurface
 
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // Left bar (below midpoint)
@@ -558,7 +558,7 @@ fun DefaultBar(
                     val roundedBelow = priceBelowMidpointValue.roundToInt()
                     if (roundedBelow > 0) {
                         val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", roundedBelow)
-                        val showOutside = roundedBelow <= 2
+                        val barIsShort = belowFraction < 0.2f
 
                         Box(
                             modifier = Modifier
@@ -567,25 +567,28 @@ fun DefaultBar(
                                 .background(baseBarColor),
                             contentAlignment = Alignment.CenterEnd
                         ) {
-                            if (!showOutside) {
+                            if (!barIsShort) {
                                 Text(
                                     text = textBelow,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = textColor,
+                                    color = textColorInside,
                                     modifier = Modifier.padding(end = 4.dp),
                                     textAlign = TextAlign.End,
                                     softWrap = false
                                 )
                             }
                         }
-                        if (showOutside) {
-                            Text(
-                                text = textBelow,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(end = 4.dp),
-                                softWrap = false,
-                            )
+                        if (barIsShort) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = textBelow,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColorOutside,
+                                    modifier = Modifier.padding(end = 4.dp),
+                                    softWrap = false,
+                                )
+                                Spacer(Modifier.fillMaxWidth(belowFraction))
+                            }
                         }
                     }
                 }
@@ -599,33 +602,36 @@ fun DefaultBar(
                 if (priceInfo.originalPrice >= effectiveMidpoint) {
                     val roundedAbove = priceAboveMidpointValue.roundToInt()
                     val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", roundedAbove)
-                    val showOutside = roundedAbove <= 2
+                    val barIsShort = aboveFraction < 0.2f
 
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(aboveFraction)
-                            .background(darkerBarColor),
+                            .background(baseBarColor),
                         contentAlignment = Alignment.CenterStart
                     ) {
-                        if (!showOutside) {
+                        if (!barIsShort) {
                             Text(
                                 text = textAbove,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White,
+                                color = textColorInside,
                                 modifier = Modifier.padding(start = 4.dp),
                                 softWrap = false
                             )
                         }
                     }
-                    if (showOutside) {
-                        Text(
-                            text = textAbove,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(start = 4.dp),
-                            softWrap = false,
-                        )
+                    if (barIsShort) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start, modifier = Modifier.fillMaxWidth()) {
+                            Spacer(Modifier.fillMaxWidth(aboveFraction))
+                            Text(
+                                text = textAbove,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textColorOutside,
+                                modifier = Modifier.padding(start = 4.dp),
+                                softWrap = false,
+                            )
+                        }
                     }
                 }
             }
@@ -642,7 +648,6 @@ fun DefaultBar(
         }
 
         val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
-        val darkerBarColor = baseBarColor.copy(red = baseBarColor.red * 0.8f, green = baseBarColor.green * 0.8f, blue = baseBarColor.blue * 0.8f)
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
         val textColor = if (luminance > 0.5) Color.Black else Color.White
         val minBarUiFraction = 0.14f
@@ -677,28 +682,7 @@ fun DefaultBar(
                 .fillMaxWidth(fullBarFraction),
             contentAlignment = Alignment.CenterStart
         ) {
-            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            if (isStromstotte && priceInOre > stromstotteThreshold && minPrice < stromstotteThreshold) {
-                val range = maxEffectivePrice - minPrice
-                val thresholdBarFraction = if (range > 0) {
-                    val scaledFraction = ((stromstotteThreshold - minPrice) / range).toFloat()
-                    (minBarUiFraction + (1f - minBarUiFraction) * scaledFraction).coerceIn(0f, 1f)
-                } else {
-                    if (stromstotteThreshold > 0) 0.5f else 0f
-                }
-
-                val baseProportion = if (fullBarFraction > 0f) (thresholdBarFraction / fullBarFraction) else 0f
-
-                if (baseProportion < 1f) {
-                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(baseProportion).background(baseBarColor))
-                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth().background(darkerBarColor))
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
-            }
-            }
+            Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
 
             Text(
                 text = priceText,
