@@ -1,5 +1,6 @@
 package com.dehypnotic.elpris_norge
 
+import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.content.Context
 import android.os.Build
@@ -35,13 +36,11 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 private const val VAT_MULTIPLIER = 1.25
 
 class MainActivity : ComponentActivity() {
-    private val refreshTrigger = mutableStateOf(0)
+    private val refreshTrigger = mutableIntStateOf(0)
     private var lastPauseTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +53,7 @@ class MainActivity : ComponentActivity() {
             Android_elprisTheme {
                 PriceScreen(
                     modifier = Modifier.fillMaxSize(),
-                    refreshTrigger = refreshTrigger.value
+                    refreshTrigger = refreshTrigger.intValue
                 )
             }
         }
@@ -78,7 +77,7 @@ class MainActivity : ComponentActivity() {
         val currentCal = java.util.Calendar.getInstance().apply { timeInMillis = currentTime }
 
         if (currentTime - lastPauseTime > hourInMillis || lastCal.get(java.util.Calendar.HOUR_OF_DAY) != currentCal.get(java.util.Calendar.HOUR_OF_DAY)) {
-            refreshTrigger.value++
+            refreshTrigger.intValue++
         }
     }
 }
@@ -354,6 +353,7 @@ fun PriceChart(
 
 data class PriceInfo(val pricePoint: PricePoint, val effectivePrice: Double, val originalPrice: Double)
 
+@SuppressLint("DefaultLocale")
 @Composable
 fun ChartBar(
     priceInfo: PriceInfo,
@@ -417,11 +417,11 @@ fun DefaultBar(
 
     val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
     val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
-    val textColor = if (luminance > 0.5) Color.Black else Color.White
+    val textColorInside = if (luminance > 0.5) Color.Black else Color.White
+    val textColorOutside = MaterialTheme.colorScheme.onSurface
     val minBarUiFraction = 0.14f
 
-    val maxOriginalPrice = maxPriceForScaling
-    val range = maxOriginalPrice - minOriginalPrice
+    val range = maxPriceForScaling - minOriginalPrice
     val fraction = if (range > 0) {
         val scaledFraction = ((originalPrice - minOriginalPrice) / range).toFloat()
         minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
@@ -429,21 +429,44 @@ fun DefaultBar(
         if (originalPrice > 0) 0.5f else 0f
     }
     val fullBarFraction = fraction.coerceIn(0f, 1f)
+    val barIsShort = fullBarFraction < 0.25f
 
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .fillMaxWidth(fullBarFraction),
+            .fillMaxWidth(),
         contentAlignment = Alignment.CenterStart
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
-
-        Text(
-            text = priceText,
-            style = MaterialTheme.typography.bodySmall,
-            color = textColor,
-            modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart)
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(fullBarFraction)
+                .background(baseBarColor)
         )
+
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (barIsShort) {
+                Spacer(modifier = Modifier.fillMaxWidth(fullBarFraction))
+                Text(
+                    text = priceText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textColorOutside,
+                    modifier = Modifier.padding(start = 4.dp),
+                    softWrap = false
+                )
+            } else {
+                Text(
+                    text = priceText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textColorInside,
+                    modifier = Modifier.padding(start = 4.dp),
+                    softWrap = false
+                )
+            }
+        }
     }
 }
 
@@ -454,29 +477,32 @@ fun AutoResizeText(
     modifier: Modifier = Modifier,
     textAlign: TextAlign? = null
 ) {
-    var resizedTextStyle by remember(text, style) { mutableStateOf(style) }
-    var shouldDraw by remember { mutableStateOf(false) }
+    val textStyleState = remember(text, style) { mutableStateOf(style) }
+    val readyToDraw = remember(text, style) { mutableStateOf(false) }
 
     Text(
         text = text,
         modifier = modifier.drawWithContent {
-            if (shouldDraw) {
+            if (readyToDraw.value) {
                 drawContent()
             }
         },
-        style = resizedTextStyle,
+        style = textStyleState.value,
         maxLines = 1,
         softWrap = false,
         textAlign = textAlign,
         onTextLayout = { result ->
             if (result.hasVisualOverflow) {
-                if (resizedTextStyle.fontSize != TextUnit.Unspecified) {
-                    resizedTextStyle = resizedTextStyle.copy(
-                        fontSize = resizedTextStyle.fontSize * 0.95f
+                val currentFontSize = textStyleState.value.fontSize
+                if (currentFontSize != TextUnit.Unspecified && currentFontSize.value > 2f) {
+                    textStyleState.value = textStyleState.value.copy(
+                        fontSize = currentFontSize * 0.9f
                     )
+                } else {
+                    readyToDraw.value = true
                 }
             } else {
-                shouldDraw = true
+                readyToDraw.value = true
             }
         }
     )
