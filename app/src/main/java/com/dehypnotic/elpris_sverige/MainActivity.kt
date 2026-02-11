@@ -318,7 +318,7 @@ fun PriceChart(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("sv-SE")) }
     val dateText = selectedDate.format(dateFormatter)
 
-    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", averagePrice)
+    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", averagePrice)
     val headerText = if (isMva) {
         "Priser i öre/kWh inkl. moms för $dateText. Snitt: $averagePriceText"
     } else {
@@ -369,7 +369,7 @@ fun ChartBar(
         val dt = java.time.OffsetDateTime.parse(priceInfo.pricePoint.time_start)
         String.format("%02d", dt.hour)
     }
-    val priceText = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", priceInfo.effectivePrice)
+    val priceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", priceInfo.effectivePrice)
     val isCurrentHour = remember(hour, currentHour, selectedDate) {
         hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
     }
@@ -418,7 +418,6 @@ fun DefaultBar(
     val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
     val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
     val textColorInside = if (luminance > 0.5) Color.Black else Color.White
-    val textColorOutside = MaterialTheme.colorScheme.onSurface
     val minBarUiFraction = 0.14f
 
     val range = maxPriceForScaling - minOriginalPrice
@@ -429,7 +428,6 @@ fun DefaultBar(
         if (originalPrice > 0) 0.5f else 0f
     }
     val fullBarFraction = fraction.coerceIn(0f, 1f)
-    val barIsShort = fullBarFraction < 0.25f
 
     Box(
         modifier = Modifier
@@ -448,24 +446,13 @@ fun DefaultBar(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (barIsShort) {
-                Spacer(modifier = Modifier.fillMaxWidth(fullBarFraction))
-                Text(
-                    text = priceText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textColorOutside,
-                    modifier = Modifier.padding(start = 4.dp),
-                    softWrap = false
-                )
-            } else {
-                Text(
-                    text = priceText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textColorInside,
-                    modifier = Modifier.padding(start = 4.dp),
-                    softWrap = false
-                )
-            }
+            Text(
+                text = priceText,
+                style = MaterialTheme.typography.bodySmall,
+                color = textColorInside,
+                modifier = Modifier.padding(start = 4.dp),
+                softWrap = false
+            )
         }
     }
 }
