@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_sverige.ui.theme
+package com.dehypnotic.elpris_danmark.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

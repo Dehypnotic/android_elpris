@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_sverige.ui.theme
+package com.dehypnotic.elpris_danmark.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

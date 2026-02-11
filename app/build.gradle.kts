@@ -5,14 +5,14 @@ plugins {
 }
 
 android {
-    namespace = "com.dehypnotic.elpris_sverige"
+    namespace = "com.dehypnotic.elpris_danmark"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dehypnotic.elpris_sverige"
+        applicationId = "com.dehypnotic.elpris_danmark"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
+        versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
