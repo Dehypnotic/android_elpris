@@ -99,11 +99,11 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
-    val zones = listOf("SE1", "SE2", "SE3", "SE4")
+    val zones = listOf("DK1", "DK2")
 
     var selectedZone by remember {
-        val savedZone = sharedPrefs.getString("selected_zone", "SE3") ?: "SE3"
-        mutableStateOf(if (savedZone in zones) savedZone else "SE3")
+        val savedZone = sharedPrefs.getString("selected_zone", "DK1") ?: "DK1"
+        mutableStateOf(if (savedZone in zones) savedZone else "DK1")
     }
     var isMva by remember {
         mutableStateOf(sharedPrefs.getBoolean("is_mva", true))
@@ -126,24 +126,22 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
             val fetchedPrices = withContext(Dispatchers.IO) {
                 fetchPrices(selectedDate, selectedZone)
             }
-            prices = fetchedPrices
             if (fetchedPrices.isEmpty()) {
-                error = "Inga priser hittades för denna dag."
-            }
-        } catch (e: Exception) {
-            val today = LocalDate.now()
-            error = if (e.message?.contains("HTTP 404") == true) {
-                when {
+                val today = LocalDate.now()
+                val url = "https://www.elprisenligenu.dk/api/v1/prices/${selectedDate.year}/${String.format("%02d-%02d", selectedDate.monthValue, selectedDate.dayOfMonth)}_${selectedZone}.json"
+                error = when {
                     selectedDate.isAfter(today.plusDays(1)) ->
-                        "Framtida priser sträcker sig endast till följande dag efter publicering tidigast kl 13"
-                    selectedDate.isEqual(today.plusDays(1)) ->
-                        "Priserna för imorgon är inte klara än. De publiceras vanligtvis efter kl. 13."
+                        "Fremtidige priser strækker sig kun til følgende dag efter udgivelse tidligst kl. 13"
+                    selectedDate.isEqual(today.plusDays(1)) && LocalTime.now().hour < 13 ->
+                        "Priserne for i morgen er ikke klar endnu. De offentliggøres normalt efter kl. 13."
                     else ->
-                        "Inga priser hittades för denna dag."
+                        "Ingen priser fundet for denne dag ($selectedDate, $selectedZone).\nURL forsøgt: $url"
                 }
             } else {
-                "Ett fel uppstod: ${e.message}"
+                prices = fetchedPrices
             }
+        } catch (e: Exception) {
+            error = "Der opstod en fejl: ${e.localizedMessage ?: e.message}"
         } finally {
             isLoading = false
         }
@@ -235,7 +233,7 @@ fun BottomBar(
 
 @Composable
 fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifier: Modifier = Modifier) {
-    val zones = listOf("SE1", "SE2", "SE3", "SE4")
+    val zones = listOf("DK1", "DK2")
     val selectedIndex = zones.indexOf(selectedZone).coerceAtLeast(0)
 
     TabRow(
@@ -277,17 +275,17 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, c
         Button(
             onClick = { onDateSelected(yesterday) },
             colors = if (selectedDate == yesterday) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("Igår") }
+        ) { Text("I går") }
         Button(
             onClick = { onDateSelected(today) },
             colors = if (selectedDate == today) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("Idag") }
+        ) { Text("I dag") }
         Button(
             onClick = { onDateSelected(tomorrow) },
             enabled = isTomorrowAvailable,
             colors = if (selectedDate == tomorrow) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("Imorgon") }
-        Button(onClick = { datePickerDialog.show() }) { Text("Datum") }
+        ) { Text("I morgen") }
+        Button(onClick = { datePickerDialog.show() }) { Text("Dato") }
     }
 }
 
@@ -315,14 +313,14 @@ fun PriceChart(
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("sv-SE")) }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("da-DK")) }
     val dateText = selectedDate.format(dateFormatter)
 
-    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", averagePrice)
+    val averagePriceLong = Math.round(averagePrice)
     val headerText = if (isMva) {
-        "Priser i öre/kWh inkl. moms för $dateText. Snitt: $averagePriceText"
+        "Priser i øre/kWh inkl. moms for $dateText. Gns: $averagePriceLong"
     } else {
-        "Priser i öre/kWh exkl. moms för $dateText. Snitt: $averagePriceText"
+        "Priser i øre/kWh ekskl. moms for $dateText. Gns: $averagePriceLong"
     }
 
     val currentHour = currentTime.hour
@@ -369,7 +367,7 @@ fun ChartBar(
         val dt = java.time.OffsetDateTime.parse(priceInfo.pricePoint.time_start)
         String.format("%02d", dt.hour)
     }
-    val priceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", priceInfo.effectivePrice)
+    val priceText = Math.round(priceInfo.effectivePrice).toInt().toString()
     val isCurrentHour = remember(hour, currentHour, selectedDate) {
         hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
     }

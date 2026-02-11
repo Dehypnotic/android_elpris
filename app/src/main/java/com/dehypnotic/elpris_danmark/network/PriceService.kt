@@ -8,7 +8,9 @@ import okhttp3.Request
 import java.time.LocalDate
 
 data class ElprisetJustNuItem(
-    val SEK_per_kWh: Double,
+    val SEK_per_kWh: Double? = null,
+    val DKK_per_kWh: Double? = null,
+    val EUR_per_kWh: Double? = null,
     val time_start: String,
     val time_end: String
 )
@@ -19,30 +21,37 @@ data class PricePoint(
 )
 
 fun fetchPrices(date: LocalDate, zone: String): List<PricePoint> {
-    val url = "https://www.elprisetjustnu.se/api/v1/prices/%d/%02d-%02d_%s.json".format(
-        date.year,
-        date.monthValue,
-        date.dayOfMonth,
-        zone
-    )
+    val year = date.year
+    val month = String.format("%02d", date.monthValue)
+    val day = String.format("%02d", date.dayOfMonth)
+    val url = "https://www.elprisenligenu.dk/api/v1/prices/$year/$month-${day}_$zone.json"
 
-    val client = OkHttpClient()
-    val req = Request.Builder().url(url).build()
+    val client = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    val req = Request.Builder()
+        .url(url)
+        .header("User-Agent", "ElprisDanmark/1.0 Android")
+        .build()
+
     client.newCall(req).execute().use { resp ->
         if (!resp.isSuccessful) {
             if (resp.code == 404) return emptyList()
-            error("HTTP ${resp.code}")
+            throw Exception("HTTP ${resp.code}")
         }
-        val body = resp.body?.string() ?: error("Empty body")
+        val body = resp.body?.string() ?: throw Exception("Empty body")
         val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
         val type = Types.newParameterizedType(List::class.java, ElprisetJustNuItem::class.java)
         val adapter = moshi.adapter<List<ElprisetJustNuItem>>(type)
         val items = adapter.fromJson(body) ?: emptyList()
 
-        return items.chunked(4).map { chunk ->
+        return items.map { item ->
+            val price = item.DKK_per_kWh ?: item.SEK_per_kWh ?: item.EUR_per_kWh ?: 0.0
             PricePoint(
-                price_per_kWh = chunk.map { it.SEK_per_kWh }.average(),
-                time_start = chunk.first().time_start
+                price_per_kWh = price,
+                time_start = item.time_start
             )
         }
     }
