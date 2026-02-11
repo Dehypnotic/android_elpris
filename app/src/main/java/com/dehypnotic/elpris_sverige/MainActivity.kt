@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_norge
+package com.dehypnotic.elpris_sverige
 
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
@@ -26,9 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.dehypnotic.elpris_norge.network.PricePoint
-import com.dehypnotic.elpris_norge.network.fetchPrices
-import com.dehypnotic.elpris_norge.ui.theme.Android_elprisTheme
+import com.dehypnotic.elpris_sverige.network.PricePoint
+import com.dehypnotic.elpris_sverige.network.fetchPrices
+import com.dehypnotic.elpris_sverige.ui.theme.Android_elprisTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext

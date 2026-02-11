@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_norge.network
+package com.dehypnotic.elpris_sverige.network
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types

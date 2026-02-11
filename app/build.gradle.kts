@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.dehypnotic.elpris_norge"
+    namespace = "com.dehypnotic.elpris_sverige"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dehypnotic.elpris_norge"
+        applicationId = "com.dehypnotic.elpris_sverige"
         minSdk = 26
         targetSdk = 36
         versionCode = 10
