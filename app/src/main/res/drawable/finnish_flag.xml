@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="11dp"
+    android:viewportWidth="18"
+    android:viewportHeight="11">
+    <!-- White background -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0h18v11h-18z" />
+    <!-- Blue cross -->
+    <path
+        android:fillColor="#003580"
+        android:pathData="M5,0h3v11h-3z M0,4h18v3h-18z" />
+</vector>
+
