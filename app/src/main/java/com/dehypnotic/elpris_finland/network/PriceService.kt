@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_danmark.network
+package com.dehypnotic.elpris_finland.network
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types

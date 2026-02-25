@@ -1,4 +1,4 @@
-package com.dehypnotic.elpris_danmark
+package com.dehypnotic.elpris_finland
 
 import org.junit.Test
 
