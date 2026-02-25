@@ -37,7 +37,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val VAT_MULTIPLIER = 1.25
+private const val VAT_MULTIPLIER = 1.255
 
 class MainActivity : ComponentActivity() {
     private val refreshTrigger = mutableIntStateOf(0)
@@ -99,12 +99,6 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
-    val zones = listOf("DK1", "DK2")
-
-    var selectedZone by remember {
-        val savedZone = sharedPrefs.getString("selected_zone", "DK1") ?: "DK1"
-        mutableStateOf(if (savedZone in zones) savedZone else "DK1")
-    }
     var isMva by remember {
         mutableStateOf(sharedPrefs.getBoolean("is_mva", true))
     }
@@ -118,30 +112,30 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         }
     }
 
-    LaunchedEffect(selectedZone, selectedDate, refreshTrigger) {
+    LaunchedEffect(selectedDate, refreshTrigger) {
         isLoading = true
         error = null
         prices = emptyList()
         try {
             val fetchedPrices = withContext(Dispatchers.IO) {
-                fetchPrices(selectedDate, selectedZone)
+                fetchPrices(selectedDate)
             }
             if (fetchedPrices.isEmpty()) {
                 val today = LocalDate.now()
-                val url = "https://www.elprisenligenu.dk/api/v1/prices/${selectedDate.year}/${String.format("%02d-%02d", selectedDate.monthValue, selectedDate.dayOfMonth)}_${selectedZone}.json"
+                val url = "https://www.sahkonhintatanaan.fi/api/v1/prices/${selectedDate.year}/${String.format(Locale.US, "%02d-%02d", selectedDate.monthValue, selectedDate.dayOfMonth)}.json"
                 error = when {
                     selectedDate.isAfter(today.plusDays(1)) ->
-                        "Fremtidige priser strækker sig kun til følgende dag efter udgivelse tidligst kl. 13"
+                        "Tulevat hinnat ovat saatavilla vasta julkaisun jälkeen, aikaisintaan klo 13."
                     selectedDate.isEqual(today.plusDays(1)) && LocalTime.now().hour < 13 ->
-                        "Priserne for i morgen er ikke klar endnu. De offentliggøres normalt efter kl. 13."
+                        "Huomisen hintoja ei ole vielä julkaistu. Ne julkaistaan yleensä klo 13 jälkeen."
                     else ->
-                        "Ingen priser fundet for denne dag ($selectedDate, $selectedZone).\nURL forsøgt: $url"
+                        "Hintoja ei löytynyt tälle päivälle ($selectedDate).\nURL: $url"
                 }
             } else {
                 prices = fetchedPrices
             }
         } catch (e: Exception) {
-            error = "Der opstod en fejl: ${e.localizedMessage ?: e.message}"
+            error = "Tapahtui virhe: ${e.localizedMessage ?: e.message}"
         } finally {
             isLoading = false
         }
@@ -162,14 +156,6 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            ZoneSelector(
-                selectedZone = selectedZone,
-                onZoneSelected = { newZone ->
-                    selectedZone = newZone
-                    sharedPrefs.edit { putString("selected_zone", newZone) }
-                },
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
             DateSelector(
                 selectedDate = selectedDate,
                 onDateSelected = { selectedDate = it },
@@ -222,7 +208,7 @@ fun BottomBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Moms", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("ALV", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Spacer(Modifier.width(8.dp))
                 Switch(checked = isMva, onCheckedChange = onMvaChange)
             }
@@ -231,24 +217,6 @@ fun BottomBar(
 }
 
 
-@Composable
-fun ZoneSelector(selectedZone: String, onZoneSelected: (String) -> Unit, modifier: Modifier = Modifier) {
-    val zones = listOf("DK1", "DK2")
-    val selectedIndex = zones.indexOf(selectedZone).coerceAtLeast(0)
-
-    TabRow(
-        selectedTabIndex = selectedIndex,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        zones.forEachIndexed { index, zone ->
-            Tab(
-                selected = selectedIndex == index,
-                onClick = { onZoneSelected(zone) },
-                text = { Text(text = zone) }
-            )
-        }
-    }
-}
 
 @Composable
 fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, currentTime: LocalTime, modifier: Modifier = Modifier) {
@@ -275,17 +243,17 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, c
         Button(
             onClick = { onDateSelected(yesterday) },
             colors = if (selectedDate == yesterday) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("I går") }
+        ) { Text("Eilen") }
         Button(
             onClick = { onDateSelected(today) },
             colors = if (selectedDate == today) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("I dag") }
+        ) { Text("Tänään") }
         Button(
             onClick = { onDateSelected(tomorrow) },
             enabled = isTomorrowAvailable,
             colors = if (selectedDate == tomorrow) selectedButtonColors else ButtonDefaults.buttonColors()
-        ) { Text("I morgen") }
-        Button(onClick = { datePickerDialog.show() }) { Text("Dato") }
+        ) { Text("Huomenna") }
+        Button(onClick = { datePickerDialog.show() }) { Text("Päivä") }
     }
 }
 
@@ -313,14 +281,14 @@ fun PriceChart(
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("da-DK")) }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yyyy", Locale.forLanguageTag("fi-FI")) }
     val dateText = selectedDate.format(dateFormatter)
 
     val averagePriceLong = Math.round(averagePrice)
     val headerText = if (isMva) {
-        "Priser i øre/kWh inkl. moms for $dateText. Gns: $averagePriceLong"
+        "Hinnat snt/kWh sis. ALV ($dateText). Ka: $averagePriceLong"
     } else {
-        "Priser i øre/kWh ekskl. moms for $dateText. Gns: $averagePriceLong"
+        "Hinnat snt/kWh ilman ALV ($dateText). Ka: $averagePriceLong"
     }
 
     val currentHour = currentTime.hour
