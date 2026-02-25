@@ -98,3 +98,8 @@ replay_pid1057436.log
 .idea/deploymentTargetSelector.xml
 app/build.gradle.kts
 gradle/libs.versions.toml
+/.idea/
+/.idea/
+/gradle/
+/.kotlin/
+/.gradle/
