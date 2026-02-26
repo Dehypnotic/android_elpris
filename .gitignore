@@ -26,3 +26,4 @@ Thumbs.db
 *.aar
 *.jks
 *.keystore
+/app/release
