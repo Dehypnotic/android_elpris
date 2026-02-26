@@ -105,16 +105,16 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         val savedZone = sharedPrefs.getString("selected_zone", "SE3") ?: "SE3"
         mutableStateOf(if (savedZone in zones) savedZone else "SE3")
     }
-    var isMva by remember {
-        mutableStateOf(sharedPrefs.getBoolean("is_mva", true))
+    var isMoms by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_moms", true))
     }
 
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
-    // Logic for MVA toggle state
-    LaunchedEffect(isMva) {
+    // Logic for MOMS toggle state
+    LaunchedEffect(isMoms) {
         sharedPrefs.edit {
-            putBoolean("is_mva", isMva)
+            putBoolean("is_moms", isMoms)
         }
     }
 
@@ -153,11 +153,11 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         modifier = modifier,
         bottomBar = {
             BottomBar(
-                isMva = isMva,
-                onMvaChange = {
-                    isMva = it
+                isMoms = isMoms,
+                onMomsChange = {
+                    isMoms = it
                     sharedPrefs.edit {
-                        putBoolean("is_mva", isMva)
+                        putBoolean("is_moms", isMoms)
                     }
                 }
             )
@@ -195,7 +195,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                         PriceChart(
                             prices = prices,
                             selectedDate = selectedDate,
-                            isMva = isMva,
+                            isMoms = isMoms,
                             currentTime = currentTime
                         )
                     }
@@ -207,8 +207,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 
 @Composable
 fun BottomBar(
-    isMva: Boolean,
-    onMvaChange: (Boolean) -> Unit
+    isMoms: Boolean,
+    onMomsChange: (Boolean) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -226,7 +226,7 @@ fun BottomBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Moms", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Spacer(Modifier.width(8.dp))
-                Switch(checked = isMva, onCheckedChange = onMvaChange)
+                Switch(checked = isMoms, onCheckedChange = onMomsChange)
             }
         }
     }
@@ -295,14 +295,14 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, c
 fun PriceChart(
     prices: List<PricePoint>,
     selectedDate: LocalDate,
-    isMva: Boolean,
+    isMoms: Boolean,
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val pricesInfo = remember(prices, isMva) {
+    val pricesInfo = remember(prices, isMoms) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.price_per_kWh
-            val originalPrice = if (isMva) priceExVat * VAT_MULTIPLIER else priceExVat
+            val originalPrice = if (isMoms) priceExVat * VAT_MULTIPLIER else priceExVat
             val originalPriceInOre = originalPrice * 100
 
             PriceInfo(pricePoint, originalPriceInOre, originalPriceInOre)
@@ -318,8 +318,8 @@ fun PriceChart(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("sv-SE")) }
     val dateText = selectedDate.format(dateFormatter)
 
-    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", averagePrice)
-    val headerText = if (isMva) {
+    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", averagePrice)
+    val headerText = if (isMoms) {
         "Priser i öre/kWh inkl. moms för $dateText. Snitt: $averagePriceText"
     } else {
         "Priser i öre/kWh exkl. moms för $dateText. Snitt: $averagePriceText"
@@ -369,7 +369,7 @@ fun ChartBar(
         val dt = java.time.OffsetDateTime.parse(priceInfo.pricePoint.time_start)
         String.format("%02d", dt.hour)
     }
-    val priceText = String.format(Locale.forLanguageTag("sv-SE"), "%.0f", priceInfo.effectivePrice)
+    val priceText = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", priceInfo.effectivePrice)
     val isCurrentHour = remember(hour, currentHour, selectedDate) {
         hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
     }
