@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Bruk versjonssjekk for å unngå avviklede API-er for heldekkende skjerm på Android 15+
+        // Käytä versiotarkistusta välttääksesi vanhentuneita API-rajapintoja koko näytön tilassa Android 15+ -versiossa
         if (Build.VERSION.SDK_INT < 35) {
             enableEdgeToEdge()
         }
@@ -99,16 +99,16 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
-    var isMva by remember {
-        mutableStateOf(sharedPrefs.getBoolean("is_mva", true))
+    var isAlv by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_alv", true))
     }
 
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
-    // Logic for MVA toggle state
-    LaunchedEffect(isMva) {
+    // Logic for ALV toggle state
+    LaunchedEffect(isAlv) {
         sharedPrefs.edit {
-            putBoolean("is_mva", isMva)
+            putBoolean("is_alv", isAlv)
         }
     }
 
@@ -145,11 +145,11 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         modifier = modifier,
         bottomBar = {
             BottomBar(
-                isMva = isMva,
-                onMvaChange = {
-                    isMva = it
+                isAlv = isAlv,
+                onAlvChange = {
+                    isAlv = it
                     sharedPrefs.edit {
-                        putBoolean("is_mva", isMva)
+                        putBoolean("is_alv", isAlv)
                     }
                 }
             )
@@ -179,7 +179,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                         PriceChart(
                             prices = prices,
                             selectedDate = selectedDate,
-                            isMva = isMva,
+                            isAlv = isAlv,
                             currentTime = currentTime
                         )
                     }
@@ -191,8 +191,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 
 @Composable
 fun BottomBar(
-    isMva: Boolean,
-    onMvaChange: (Boolean) -> Unit
+    isAlv: Boolean,
+    onAlvChange: (Boolean) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -210,7 +210,7 @@ fun BottomBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("ALV", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Spacer(Modifier.width(8.dp))
-                Switch(checked = isMva, onCheckedChange = onMvaChange)
+                Switch(checked = isAlv, onCheckedChange = onAlvChange)
             }
         }
     }
@@ -261,14 +261,14 @@ fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, c
 fun PriceChart(
     prices: List<PricePoint>,
     selectedDate: LocalDate,
-    isMva: Boolean,
+    isAlv: Boolean,
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val pricesInfo = remember(prices, isMva) {
+    val pricesInfo = remember(prices, isAlv) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.price_per_kWh
-            val originalPrice = if (isMva) priceExVat * VAT_MULTIPLIER else priceExVat
+            val originalPrice = if (isAlv) priceExVat * VAT_MULTIPLIER else priceExVat
             val originalPriceInOre = originalPrice * 100
 
             PriceInfo(pricePoint, originalPriceInOre, originalPriceInOre)
@@ -284,11 +284,11 @@ fun PriceChart(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yyyy", Locale.forLanguageTag("fi-FI")) }
     val dateText = selectedDate.format(dateFormatter)
 
-    val averagePriceLong = Math.round(averagePrice)
-    val headerText = if (isMva) {
-        "Hinnat snt/kWh sis. ALV ($dateText). Ka: $averagePriceLong"
+    val averagePriceFormatted = String.format(Locale.getDefault(), "%.2f", averagePrice)
+    val headerText = if (isAlv) {
+        "Hinnat snt/kWh sis. ALV ($dateText). Ka: $averagePriceFormatted"
     } else {
-        "Hinnat snt/kWh ilman ALV ($dateText). Ka: $averagePriceLong"
+        "Hinnat snt/kWh ilman ALV ($dateText). Ka: $averagePriceFormatted"
     }
 
     val currentHour = currentTime.hour
@@ -335,7 +335,7 @@ fun ChartBar(
         val dt = java.time.OffsetDateTime.parse(priceInfo.pricePoint.time_start)
         String.format("%02d", dt.hour)
     }
-    val priceText = Math.round(priceInfo.effectivePrice).toInt().toString()
+    val priceText = String.format(Locale.getDefault(), "%.2f", priceInfo.effectivePrice)
     val isCurrentHour = remember(hour, currentHour, selectedDate) {
         hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
     }
