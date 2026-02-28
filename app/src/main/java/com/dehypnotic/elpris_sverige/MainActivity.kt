@@ -36,6 +36,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 private const val VAT_MULTIPLIER = 1.25
 
@@ -108,13 +110,29 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     var isMoms by remember {
         mutableStateOf(sharedPrefs.getBoolean("is_moms", true))
     }
+    var isOtherFees by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_other_fees", false))
+    }
+    var otherFeesAmount by remember {
+        mutableStateOf(sharedPrefs.getFloat("other_fees_amount", 0f))
+    }
 
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
-    // Logic for MOMS toggle state
+    // Logic for other fees and amount state
     LaunchedEffect(isMoms) {
         sharedPrefs.edit {
             putBoolean("is_moms", isMoms)
+        }
+    }
+    LaunchedEffect(isOtherFees) {
+        sharedPrefs.edit {
+            putBoolean("is_other_fees", isOtherFees)
+        }
+    }
+    LaunchedEffect(otherFeesAmount) {
+        sharedPrefs.edit {
+            putFloat("other_fees_amount", otherFeesAmount)
         }
     }
 
@@ -154,12 +172,11 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         bottomBar = {
             BottomBar(
                 isMoms = isMoms,
-                onMomsChange = {
-                    isMoms = it
-                    sharedPrefs.edit {
-                        putBoolean("is_moms", isMoms)
-                    }
-                }
+                onMomsChange = { isMoms = it },
+                isOtherFees = isOtherFees,
+                onOtherFeesChange = { isOtherFees = it },
+                otherFeesAmount = otherFeesAmount,
+                onOtherFeesAmountChange = { otherFeesAmount = it }
             )
         }
     ) { innerPadding ->
@@ -196,6 +213,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                             prices = prices,
                             selectedDate = selectedDate,
                             isMoms = isMoms,
+                            isOtherFees = isOtherFees,
+                            otherFeesAmount = otherFeesAmount,
                             currentTime = currentTime
                         )
                     }
@@ -208,25 +227,60 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 @Composable
 fun BottomBar(
     isMoms: Boolean,
-    onMomsChange: (Boolean) -> Unit
+    onMomsChange: (Boolean) -> Unit,
+    isOtherFees: Boolean,
+    onOtherFeesChange: (Boolean) -> Unit,
+    otherFeesAmount: Float,
+    onOtherFeesAmountChange: (Float) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 8.dp,
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Moms", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.width(8.dp))
-                Switch(checked = isMoms, onCheckedChange = onMomsChange)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Moms", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = isMoms, onCheckedChange = onMomsChange)
+                }
+
+                Spacer(Modifier.width(24.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Keeping "Andre afgifter" as requested (på dansk)
+                    Text("Andre afgifter", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = isOtherFees, onCheckedChange = onOtherFeesChange)
+                }
+
+                if (isOtherFees) {
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedTextField(
+                        value = if (otherFeesAmount == 0f) "" else otherFeesAmount.toString(),
+                        onValueChange = {
+                            val newVal = it.replace(',', '.').toFloatOrNull() ?: 0f
+                            onOtherFeesAmountChange(newVal)
+                        },
+                        modifier = Modifier.width(80.dp),
+                        label = { Text("Belopp", style = MaterialTheme.typography.bodySmall) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
@@ -296,16 +350,23 @@ fun PriceChart(
     prices: List<PricePoint>,
     selectedDate: LocalDate,
     isMoms: Boolean,
+    isOtherFees: Boolean,
+    otherFeesAmount: Float,
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val pricesInfo = remember(prices, isMoms) {
+    val pricesInfo = remember(prices, isMoms, isOtherFees, otherFeesAmount) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.price_per_kWh
-            val originalPrice = if (isMoms) priceExVat * VAT_MULTIPLIER else priceExVat
-            val originalPriceInOre = originalPrice * 100
+            var effectivePrice = if (isMoms) priceExVat * VAT_MULTIPLIER else priceExVat
+            val originalPriceInOre = effectivePrice * 100
 
-            PriceInfo(pricePoint, originalPriceInOre, originalPriceInOre)
+            if (isOtherFees) {
+                effectivePrice += (otherFeesAmount / 100.0)
+            }
+            val effectivePriceInOre = effectivePrice * 100
+
+            PriceInfo(pricePoint, effectivePriceInOre, originalPriceInOre)
         }
     }
 
@@ -318,11 +379,11 @@ fun PriceChart(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("sv-SE")) }
     val dateText = selectedDate.format(dateFormatter)
 
-    val averagePriceText = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", averagePrice)
+    val averagePriceFormatted = String.format(Locale.forLanguageTag("sv-SE"), "%.2f", averagePrice)
     val headerText = if (isMoms) {
-        "Priser i öre/kWh inkl. moms för $dateText. Snitt: $averagePriceText"
+        "Priser i öre/kWh inkl. moms för $dateText. Snitt: $averagePriceFormatted"
     } else {
-        "Priser i öre/kWh exkl. moms för $dateText. Snitt: $averagePriceText"
+        "Priser i öre/kWh exkl. moms för $dateText. Snitt: $averagePriceFormatted"
     }
 
     val currentHour = currentTime.hour
