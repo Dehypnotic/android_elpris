@@ -36,6 +36,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 private const val VAT_MULTIPLIER = 1.255
 
@@ -103,12 +106,32 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         mutableStateOf(sharedPrefs.getBoolean("is_alv", true))
     }
 
+    var isOtherFees by remember {
+        mutableStateOf(sharedPrefs.getBoolean("is_other_fees", false))
+    }
+
+    var otherFeesValue by remember {
+        mutableStateOf(sharedPrefs.getFloat("other_fees_value", 0f))
+    }
+
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
     // Logic for ALV toggle state
     LaunchedEffect(isAlv) {
         sharedPrefs.edit {
             putBoolean("is_alv", isAlv)
+        }
+    }
+
+    LaunchedEffect(isOtherFees) {
+        sharedPrefs.edit {
+            putBoolean("is_other_fees", isOtherFees)
+        }
+    }
+
+    LaunchedEffect(otherFeesValue) {
+        sharedPrefs.edit {
+            putFloat("other_fees_value", otherFeesValue)
         }
     }
 
@@ -151,6 +174,20 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                     sharedPrefs.edit {
                         putBoolean("is_alv", isAlv)
                     }
+                },
+                isOtherFees = isOtherFees,
+                onOtherFeesChange = {
+                    isOtherFees = it
+                    sharedPrefs.edit {
+                        putBoolean("is_other_fees", isOtherFees)
+                    }
+                },
+                otherFeesValue = otherFeesValue,
+                onOtherFeesValueChange = {
+                    otherFeesValue = it
+                    sharedPrefs.edit {
+                        putFloat("other_fees_value", otherFeesValue)
+                    }
                 }
             )
         }
@@ -180,6 +217,8 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
                             prices = prices,
                             selectedDate = selectedDate,
                             isAlv = isAlv,
+                            isOtherFees = isOtherFees,
+                            otherFeesValue = otherFeesValue,
                             currentTime = currentTime
                         )
                     }
@@ -192,31 +231,93 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
 @Composable
 fun BottomBar(
     isAlv: Boolean,
-    onAlvChange: (Boolean) -> Unit
+    onAlvChange: (Boolean) -> Unit,
+    isOtherFees: Boolean,
+    onOtherFeesChange: (Boolean) -> Unit,
+    otherFeesValue: Float,
+    onOtherFeesValueChange: (Float) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 8.dp,
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
                 .navigationBarsPadding(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("ALV", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.width(8.dp))
-                Switch(checked = isAlv, onCheckedChange = onAlvChange)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("ALV", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(Modifier.width(4.dp))
+                    Switch(checked = isAlv, onCheckedChange = onAlvChange)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Muut kulut", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(Modifier.width(4.dp))
+                    Switch(checked = isOtherFees, onCheckedChange = onOtherFeesChange)
+                }
+
+                if (isOtherFees) {
+                    var textValue by remember(otherFeesValue) {
+                        mutableStateOf(if (otherFeesValue == 0f) "" else otherFeesValue.toString().replace('.', ','))
+                    }
+
+                    BasicTextField(
+                        value = textValue,
+                        onValueChange = { newValue: String ->
+                            val processedValue = newValue.replace(',', '.')
+                            if (processedValue.isEmpty()) {
+                                textValue = ""
+                                onOtherFeesValueChange(0f)
+                            } else if (processedValue.toDoubleOrNull() != null || processedValue == "." || processedValue == "-") {
+                                textValue = newValue
+                                processedValue.toFloatOrNull()?.let {
+                                    onOtherFeesValueChange(it)
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier
+                            .width(60.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        ),
+                        decorationBox = { innerTextField: @Composable () -> Unit ->
+                            Box(contentAlignment = Alignment.Center) {
+                                if (textValue.isEmpty()) {
+                                    Text(
+                                        "snt",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
-
-
 
 @Composable
 fun DateSelector(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit, currentTime: LocalTime, modifier: Modifier = Modifier) {
@@ -262,13 +363,16 @@ fun PriceChart(
     prices: List<PricePoint>,
     selectedDate: LocalDate,
     isAlv: Boolean,
+    isOtherFees: Boolean,
+    otherFeesValue: Float,
     currentTime: LocalTime,
     modifier: Modifier = Modifier
 ) {
-    val pricesInfo = remember(prices, isAlv) {
+    val pricesInfo = remember(prices, isAlv, isOtherFees, otherFeesValue) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.price_per_kWh
-            val originalPrice = if (isAlv) priceExVat * VAT_MULTIPLIER else priceExVat
+            val priceWithOtherFees = if (isOtherFees) priceExVat + (otherFeesValue / 100.0) else priceExVat
+            val originalPrice = if (isAlv) priceWithOtherFees * VAT_MULTIPLIER else priceWithOtherFees
             val originalPriceInOre = originalPrice * 100
 
             PriceInfo(pricePoint, originalPriceInOre, originalPriceInOre)
