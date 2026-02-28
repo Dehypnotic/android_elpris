@@ -1,3 +1,4 @@
+# Foldere
 .gradle/
 .idea/
 .kotlin/
@@ -10,11 +11,6 @@ build/
 local.properties
 
 # Android Studio / IntelliJ-spesifikk støy
-.idea/workspace.xml
-.idea/libraries/
-.idea/modules.xml
-.idea/assetWizardSettings.xml
-.idea/navEditor.xml
 *.iml
 *.iws
 *.ipr
