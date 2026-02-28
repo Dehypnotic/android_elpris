@@ -1,5 +1,8 @@
-# Gradle-filer og cache
 .gradle/
+.idea/
+.kotlin/
+gradle/
+/app/release/
 build/
 /*/build/
 
@@ -7,11 +10,6 @@ build/
 local.properties
 
 # Android Studio / IntelliJ-spesifikk støy
-.idea/workspace.xml
-.idea/libraries/
-.idea/modules.xml
-.idea/assetWizardSettings.xml
-.idea/navEditor.xml
 *.iml
 *.iws
 *.ipr
