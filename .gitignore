@@ -1,4 +1,8 @@
 .gradle/
+.idea/
+.kotlin/
+gradle/
+/app/release/
 build/
 /*/build/
 
@@ -26,4 +30,3 @@ Thumbs.db
 *.aar
 *.jks
 *.keystore
-/app/release/
