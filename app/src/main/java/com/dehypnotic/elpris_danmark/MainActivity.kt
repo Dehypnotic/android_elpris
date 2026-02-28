@@ -265,11 +265,18 @@ fun BottomBar(
 
                 if (isOtherFees) {
                     Spacer(Modifier.width(8.dp))
+                    var textFieldValue by remember(otherFeesAmount) {
+                        mutableStateOf(if (otherFeesAmount == 0f) "" else otherFeesAmount.toString().replace('.', ','))
+                    }
                     OutlinedTextField(
-                        value = if (otherFeesAmount == 0f) "" else otherFeesAmount.toString(),
-                        onValueChange = {
-                            val newVal = it.replace(',', '.').toFloatOrNull() ?: 0f
-                            onOtherFeesAmountChange(newVal)
+                        value = textFieldValue,
+                        onValueChange = { newValue ->
+                            val sanitized = newValue.replace(',', '.')
+                            if (sanitized.isEmpty() || sanitized == "." || sanitized.toFloatOrNull() != null) {
+                                textFieldValue = newValue
+                                val numericValue = sanitized.toFloatOrNull() ?: 0f
+                                onOtherFeesAmountChange(numericValue)
+                            }
                         },
                         modifier = Modifier.width(80.dp),
                         label = { Text("Beløb", style = MaterialTheme.typography.bodySmall) },
