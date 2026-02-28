@@ -36,6 +36,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 
@@ -288,7 +289,7 @@ fun BottomBar(
                         mutableStateOf(if (otherFeesValue == 0f) "" else otherFeesValue.toString().replace('.', ','))
                     }
 
-                    OutlinedTextField(
+                    BasicTextField(
                         value = textValue,
                         onValueChange = { newValue: String ->
                             val processedValue = newValue.replace(',', '.')
@@ -302,11 +303,31 @@ fun BottomBar(
                                 }
                             }
                         },
-                        label = { Text("Öre", style = MaterialTheme.typography.bodySmall) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.width(80.dp),
+                        modifier = Modifier
+                            .width(60.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodySmall
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        ),
+                        decorationBox = { innerTextField: @Composable () -> Unit ->
+                            Box(contentAlignment = Alignment.Center) {
+                                if (textValue.isEmpty()) {
+                                    Text(
+                                        "Öre",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
                     )
                 }
             }
