@@ -8,6 +8,7 @@ import android.widget.DatePicker
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,12 +19,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.dehypnotic.elpris_norge.network.PricePoint
 import com.dehypnotic.elpris_norge.network.fetchPrices
@@ -443,22 +447,167 @@ fun PriceChart(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            items(pricesInfo) { priceInfo ->
-                ChartBar(
-                    priceInfo = priceInfo,
-                    maxPriceForScaling = maxPriceForScaling,
-                    minOriginalPrice = minOriginalPrice,
-                    minPrice = minPrice,
-                    maxEffectivePrice = maxEffectivePrice,
-                    stromstotteThreshold = stromstotteThreshold,
-                    selectedDate = selectedDate,
-                    currentHour = currentHour,
-                    isNorgespris = isNorgespris,
-                    isStromstotte = isStromstotte,
-                    maxAbsoluteDeviation = maxAbsoluteDeviation,
-                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
-                )
+        BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            val scope = this
+            val density = LocalDensity.current
+            val maxWidthPx = with(density) { scope.maxWidth.toPx() }
+            val minBarUiFraction = 0.14f
+            val labelPadding = 24.dp
+            val labelPaddingPx = with(density) { labelPadding.toPx() }
+
+            if (!isNorgespris && pricesInfo.isNotEmpty()) {
+                val overallMin = if (isStromstotte) minPrice else minOriginalPrice
+                val overallMax = if (isStromstotte) maxEffectivePrice else maxPriceForScaling
+                val range = overallMax - overallMin
+
+                val step = if (range < 50) 10 else if (range < 125) 25 else 50
+                val startValue = (overallMin / step).toInt() * step
+                val marks = mutableListOf<Int>()
+                var currentMark = startValue
+                while (currentMark <= overallMax) {
+                    if (currentMark >= overallMin) {
+                        marks.add(currentMark)
+                    }
+                    currentMark += step
+                }
+                if (marks.size > 5) {
+                    val filteredMarks = marks.take(5)
+                    marks.clear()
+                    marks.addAll(filteredMarks)
+                }
+
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Vertical background lines
+                            marks.forEach { mark ->
+                                val fraction = if (range > 0) {
+                                    val scaledFraction = ((mark - overallMin) / range).toFloat()
+                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                                } else 0.5f
+
+                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
+                                drawLine(
+                                    color = Color.Gray.copy(alpha = 0.5f),
+                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
+                                    strokeWidth = 2.dp.toPx()
+                                )
+                            }
+
+                            // Stromstotte reference line
+                            val stromstotteThresholdLine = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
+                            if (stromstotteThresholdLine >= overallMin && stromstotteThresholdLine <= overallMax) {
+                                val fraction = if (range > 0) {
+                                    val scaledFraction = ((stromstotteThresholdLine - overallMin) / range).toFloat()
+                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                                } else 0.5f
+                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
+                                drawLine(
+                                    color = Color.Red.copy(alpha = 0.6f),
+                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
+                                    strokeWidth = 1.5.dp.toPx()
+                                )
+                            }
+
+                            // Norgespris reference line
+                            val norgesprisMidpointLine = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
+                            if (norgesprisMidpointLine >= overallMin && norgesprisMidpointLine <= overallMax) {
+                                val fraction = if (range > 0) {
+                                    val scaledFraction = ((norgesprisMidpointLine - overallMin) / range).toFloat()
+                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                                } else 0.5f
+                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
+                                drawLine(
+                                    color = Color.Red.copy(alpha = 0.6f),
+                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
+                                    strokeWidth = 1.5.dp.toPx()
+                                )
+                            }
+                        }
+
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(pricesInfo) { priceInfo ->
+                                ChartBar(
+                                    priceInfo = priceInfo,
+                                    maxPriceForScaling = maxPriceForScaling,
+                                    minOriginalPrice = minOriginalPrice,
+                                    minPrice = minPrice,
+                                    maxEffectivePrice = maxEffectivePrice,
+                                    stromstotteThreshold = stromstotteThreshold,
+                                    selectedDate = selectedDate,
+                                    currentHour = currentHour,
+                                    isNorgespris = isNorgespris,
+                                    isStromstotte = isStromstotte,
+                                    maxAbsoluteDeviation = maxAbsoluteDeviation,
+                                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Horizontal Axis and Labels
+                    Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawLine(
+                                color = Color.Black,
+                                start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f),
+                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                                strokeWidth = 2.dp.toPx()
+                            )
+                            marks.forEach { mark ->
+                                val fraction = if (range > 0) {
+                                    val scaledFraction = ((mark - overallMin) / range).toFloat()
+                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                                } else 0.5f
+                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
+                                drawLine(
+                                    color = Color.Black,
+                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(x, 4.dp.toPx()),
+                                    strokeWidth = 2.dp.toPx()
+                                )
+                            }
+                        }
+                        marks.forEach { mark ->
+                            val fraction = if (range > 0) {
+                                val scaledFraction = ((mark - overallMin) / range).toFloat()
+                                minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                            } else 0.5f
+                            val xPos = labelPadding + (scope.maxWidth - labelPadding) * fraction
+                            Text(
+                                text = mark.toString(),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 4.dp),
+                                textAlign = TextAlign.Center,
+                                color = Color.Gray
+                            )
+                        }
+
+                        // Reference Labels removal
+                    }
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(pricesInfo) { priceInfo ->
+                        ChartBar(
+                            priceInfo = priceInfo,
+                            maxPriceForScaling = maxPriceForScaling,
+                            minOriginalPrice = minOriginalPrice,
+                            minPrice = minPrice,
+                            maxEffectivePrice = maxEffectivePrice,
+                            stromstotteThreshold = stromstotteThreshold,
+                            selectedDate = selectedDate,
+                            currentHour = currentHour,
+                            isNorgespris = isNorgespris,
+                            isStromstotte = isStromstotte,
+                            maxAbsoluteDeviation = maxAbsoluteDeviation,
+                            modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                        )
+                    }
+                }
             }
         }
     }
