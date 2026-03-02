@@ -549,7 +549,7 @@ fun PriceChart(
                     }
 
                     // Horizontal Axis and Labels
-                    Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                    Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawLine(
                                 color = Color.Black,
@@ -580,7 +580,7 @@ fun PriceChart(
                             Text(
                                 text = mark.toString(),
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 4.dp),
+                                modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 5.dp),
                                 textAlign = TextAlign.Center,
                                 color = Color.Gray
                             )
