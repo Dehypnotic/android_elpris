@@ -25,3 +25,5 @@ Thumbs.db
 *.aar
 *.jks
 *.keystore
+.idea/caches/deviceStreaming.xml
+.idea/deploymentTargetSelector.xml
