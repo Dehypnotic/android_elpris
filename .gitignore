@@ -27,3 +27,4 @@ Thumbs.db
 *.jks
 *.keystore
 /app/release/
+.idea/deploymentTargetSelector.xml
