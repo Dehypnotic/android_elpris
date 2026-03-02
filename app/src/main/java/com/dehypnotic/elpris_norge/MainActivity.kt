@@ -438,23 +438,23 @@ fun PriceChart(
         list.take(5)
     }
 
+    val minBarUiFraction = 0.14f
+    fun getXFraction(value: Double): Float {
+        return if (isNorgespris) {
+            if (maxAbsoluteDeviation > 0) 0.5f + ((value - effectiveMidpoint) / (2 * maxAbsoluteDeviation)).toFloat() else 0.5f
+        } else {
+            if (chartRange > 0) minBarUiFraction + (1f - minBarUiFraction) * ((value - overallMin) / chartRange).toFloat() else 0.5f
+        }
+    }
+
+    val density = LocalDensity.current
+    val labelPadding = 24.dp
+    val labelPaddingPx = with(density) { labelPadding.toPx() }
+
     Column(modifier = modifier.fillMaxSize()) {
         AutoResizeText(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            val scope = this
-            val density = LocalDensity.current
-            val minBarUiFraction = 0.14f
-            val labelPadding = 24.dp
-            val labelPaddingPx = with(density) { labelPadding.toPx() }
-
-            fun getXFraction(value: Double): Float {
-                return if (isNorgespris) {
-                    if (maxAbsoluteDeviation > 0) 0.5f + ((value - effectiveMidpoint) / (2 * maxAbsoluteDeviation)).toFloat() else 0.5f
-                } else {
-                    if (chartRange > 0) minBarUiFraction + (1f - minBarUiFraction) * ((value - overallMin) / chartRange).toFloat() else 0.5f
-                }
-            }
-
+            val constraintsScope = this
             Column(modifier = Modifier.fillMaxSize()) {
                 // Top labels and line
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
@@ -465,9 +465,9 @@ fun PriceChart(
                         val labelText = if (lineVal == stromstotteThreshold) "Strømstøtte" else "Norgespris"
                         val fraction = getXFraction(lineVal)
                         if (fraction in 0f..1f) {
-                            val xPos = labelPadding + (scope.maxWidth - labelPadding) * fraction
+                            val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
                             val labelWidth = 65.dp
-                            val isTooFarRight = xPos + labelWidth / 2 > scope.maxWidth
+                            val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
                             val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
                             val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
 
@@ -530,7 +530,7 @@ fun PriceChart(
                         }
                     }
                     marks.forEach { mark ->
-                        val xPos = labelPadding + (scope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
+                        val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
                         Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 5.dp), textAlign = TextAlign.Center, color = Color.Gray)
                     }
                 }
