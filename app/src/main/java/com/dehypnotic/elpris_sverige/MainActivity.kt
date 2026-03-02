@@ -200,47 +200,21 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            ZoneSelector(
-                selectedZone = selectedZone,
-                onZoneSelected = { newZone ->
-                    selectedZone = newZone
-                    sharedPrefs.edit { putString("selected_zone", newZone) }
-                },
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            DateSelector(
-                selectedDate = selectedDate,
-                onDateSelected = { selectedDate = it },
-                currentTime = currentTime,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-
-            Box(modifier = Modifier.weight(1f)) {
-                when {
-                    isLoading -> {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                    error != null -> {
-                        Text(
-                            text = error!!,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center).padding(16.dp)
-                        )
-                    }
-                    else -> {
-                        PriceChart(
-                            prices = prices,
-                            selectedDate = selectedDate,
-                            isMoms = isMoms,
-                            isOtherFees = isOtherFees,
-                            otherFeesValue = otherFeesValue,
-                            currentTime = currentTime
-                        )
-                    }
-                }
-            }
-        }
+        PriceChart(
+            prices = prices,
+            selectedDate = selectedDate,
+            isMoms = isMoms,
+            isOtherFees = isOtherFees,
+            otherFeesValue = otherFeesValue,
+            currentTime = currentTime,
+            modifier = Modifier.padding(innerPadding),
+            selectedZone = selectedZone,
+            onZoneSelected = { newZone ->
+                selectedZone = newZone
+                sharedPrefs.edit { putString("selected_zone", newZone) }
+            },
+            onDateSelected = { selectedDate = it }
+        )
     }
 }
 
@@ -306,11 +280,12 @@ fun BottomBar(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .width(60.dp)
+                            .heightIn(min = 20.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = MaterialTheme.shapes.small
                             )
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -401,24 +376,43 @@ fun PriceChart(
     isOtherFees: Boolean,
     otherFeesValue: Float,
     currentTime: LocalTime,
+    selectedZone: String,
+    onZoneSelected: (String) -> Unit,
+    onDateSelected: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val pricesInfo = remember(prices, isMoms, isOtherFees, otherFeesValue) {
         prices.map { pricePoint ->
             val priceExVat = pricePoint.price_per_kWh
             val priceWithOtherFees = if (isOtherFees) priceExVat + (otherFeesValue / 100.0) else priceExVat
-            val originalPrice = if (isMoms) priceWithOtherFees * VAT_MULTIPLIER else priceWithOtherFees
-            val originalPriceInOre = originalPrice * 100
+            val effectivePrice = if (isMoms) priceWithOtherFees * VAT_MULTIPLIER else priceWithOtherFees
+            val effectivePriceInOre = effectivePrice * 100
 
-            PriceInfo(pricePoint, originalPriceInOre, originalPriceInOre)
+            PriceInfo(pricePoint, effectivePriceInOre, effectivePriceInOre)
         }
     }
 
-    val maxPriceForScaling = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.originalPrice } ?: 1.0 }
-    val minOriginalPrice = remember(pricesInfo) { pricesInfo.filter { it.originalPrice >= 0 }.minOfOrNull { it.originalPrice } ?: 0.0 }
-    val minPrice = remember(pricesInfo) { pricesInfo.filter { it.effectivePrice >= 0 }.minOfOrNull { it.effectivePrice } ?: 0.0 }
-    val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
+    val maxPrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
+    val minPrice = remember(pricesInfo) { pricesInfo.minOfOrNull { it.effectivePrice } ?: 0.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
+
+    val diff = maxPrice - minPrice
+    val step = when {
+        diff <= 50 -> 10.0
+        diff <= 125 -> 25.0
+        else -> 50.0
+    }
+
+    val lines = remember(minPrice, maxPrice, step) {
+        val firstLine = (Math.ceil(minPrice / step) * step).toInt()
+        val list = mutableListOf<Int>()
+        var current = firstLine
+        while (current <= maxPrice && list.size < 5) {
+            list.add(current)
+            current += step.toInt()
+        }
+        list
+    }
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("sv-SE")) }
     val dateText = selectedDate.format(dateFormatter)
@@ -433,24 +427,100 @@ fun PriceChart(
     val currentHour = currentTime.hour
 
     Column(modifier = modifier.fillMaxSize()) {
+        ZoneSelector(
+            selectedZone = selectedZone,
+            onZoneSelected = onZoneSelected,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+        DateSelector(
+            selectedDate = selectedDate,
+            onDateSelected = onDateSelected,
+            currentTime = currentTime,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
         AutoResizeText(
             text = headerText,
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            items(pricesInfo) { priceInfo ->
-                ChartBar(
-                    priceInfo = priceInfo,
-                    maxPriceForScaling = maxPriceForScaling,
-                    minOriginalPrice = minOriginalPrice,
-                    minPrice = minPrice,
-                    maxEffectivePrice = maxEffectivePrice,
-                    selectedDate = selectedDate,
-                    currentHour = currentHour,
-                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
-                )
+        Box(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            // Background Lines (Drawn behind)
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(start = 24.dp)) {
+                val canvasWidth = size.width
+                lines.forEach { linePrice ->
+                    val fraction = if (maxPrice - minPrice > 0) {
+                        (0.14f + (1f - 0.14f) * ((linePrice - minPrice) / (maxPrice - minPrice))).toFloat()
+                    } else 0.5f
+                    val x = canvasWidth * fraction
+                    drawLine(
+                        color = Color.LightGray.copy(alpha = 0.7f),
+                        start = androidx.compose.ui.geometry.Offset(x, 0f),
+                        end = androidx.compose.ui.geometry.Offset(x, size.height),
+                        strokeWidth = 2f,
+                    )
+                }
+            }
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(pricesInfo) { priceInfo ->
+                    ChartBar(
+                        priceInfo = priceInfo,
+                        maxPriceForScaling = maxPrice,
+                        minOriginalPrice = minPrice,
+                        minPrice = minPrice,
+                        maxEffectivePrice = maxPrice,
+                        selectedDate = selectedDate,
+                        currentHour = currentHour,
+                        modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                    )
+                }
+            }
+        }
+
+        // Horizontal line at the bottom of the bars
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(start = 24.dp)
+                .height(1.dp)
+                .background(Color.Gray)
+        )
+
+        // X-Axis Labels and vertical markers
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(start = 24.dp)
+                .height(40.dp)
+        ) {
+            val canvasWidth = this.maxWidth
+            lines.forEach { linePrice ->
+                val fraction = if (maxPrice - minPrice > 0) {
+                    (0.14f + (1f - 0.14f) * ((linePrice - minPrice) / (maxPrice - minPrice))).toFloat()
+                } else 0.5f
+
+                val xPos = canvasWidth * fraction
+
+                Column(
+                    modifier = Modifier.offset(x = xPos - 20.dp), // Center around the line
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(8.dp)
+                            .background(Color.Gray)
+                    )
+                    Text(
+                        text = linePrice.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(40.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
