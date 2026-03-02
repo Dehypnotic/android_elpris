@@ -399,13 +399,12 @@ fun PriceChart(
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
-    val (percentBelow, percentAbove) = remember(pricesInfo, isNorgespris, effectiveMidpoint) {
+    val (sumBelow, sumAbove) = remember(pricesInfo, isNorgespris, effectiveMidpoint) {
         if (isNorgespris && pricesInfo.isNotEmpty()) {
-            val sumBelow = pricesInfo.map { effectiveMidpoint - it.originalPrice }.filter { it > 0 }.sum()
-            val sumAbove = pricesInfo.map { it.originalPrice - effectiveMidpoint }.filter { it > 0 }.sum()
-            val totalDeviation = sumBelow + sumAbove
-            if (totalDeviation > 0) Pair((sumBelow / totalDeviation * 100).toInt(), (100 - (sumBelow / totalDeviation * 100).toInt())) else Pair(0, 0)
-        } else Pair(0, 0)
+            val below = pricesInfo.map { effectiveMidpoint - it.originalPrice }.filter { it > 0 }.sum()
+            val above = pricesInfo.map { it.originalPrice - effectiveMidpoint }.filter { it > 0 }.sum()
+            Pair(below, above)
+        } else Pair(0.0, 0.0)
     }
 
     val stromstotteThreshold = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
@@ -413,7 +412,11 @@ fun PriceChart(
     val averagePriceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", averagePrice)
     val headerText = when {
         isStromstotte -> "Din pris etter strømstøtte for $dateText. Snitt: $averagePriceText"
-        isNorgespris -> "Prisavvik fra Norgespris for $dateText. Under: $percentBelow%, Over: $percentAbove%"
+        isNorgespris -> {
+            val belowText = String.format(Locale.forLanguageTag("no-NO"), "%.0f", sumBelow)
+            val aboveText = String.format(Locale.forLanguageTag("no-NO"), "%.0f", sumAbove)
+            "Prisavvik fra Norgespris for $dateText. Under: $belowText øre, Over: $aboveText øre"
+        }
         isMva -> "Priser i øre/kWh inkl. mva for $dateText. Snitt: $averagePriceText"
         else -> "Priser i øre/kWh eks. mva for $dateText. Snitt: $averagePriceText"
     }
@@ -456,29 +459,20 @@ fun PriceChart(
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
             val constraintsScope = this
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top labels and line
+                // Top Axis and price marks
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, size.height), end = androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2.dp.toPx())
-                    }
-                    listOf(stromstotteThreshold, effectiveMidpoint).forEach { lineVal ->
-                        val labelText = if (lineVal == stromstotteThreshold) "Strømstøtte" else "Norgespris"
-                        val fraction = getXFraction(lineVal)
-                        if (fraction in 0f..1f) {
-                            val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
-                            val labelWidth = 65.dp
-                            val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
-                            val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
-                            val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
-
-                            Text(
-                                text = labelText,
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = Color.Red),
-                                modifier = Modifier.align(Alignment.BottomStart).width(labelWidth).offset(x = offset, y = (-2).dp),
-                                textAlign = labelTextAlign,
-                                softWrap = false
-                            )
+                        marks.forEach { mark ->
+                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(mark.toDouble())
+                            if (x in labelPaddingPx..size.width) {
+                                drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(x, size.height), end = androidx.compose.ui.geometry.Offset(x, size.height - 4.dp.toPx()), strokeWidth = 2.dp.toPx())
+                            }
                         }
+                    }
+                    marks.forEach { mark ->
+                        val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
+                        Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.BottomStart).offset(x = xPos - 12.dp, y = (-5).dp), textAlign = TextAlign.Center, color = Color.Black)
                     }
                 }
 
@@ -492,7 +486,8 @@ fun PriceChart(
                             }
                         }
                         // Red lines
-                        listOf(stromstotteThreshold, effectiveMidpoint).forEach { lineVal ->
+                        val specialLineValues = if (isNorgespris) listOf(effectiveMidpoint) else listOf(stromstotteThreshold, effectiveMidpoint)
+                        specialLineValues.forEach { lineVal ->
                             val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(lineVal)
                             if (x in labelPaddingPx..size.width) {
                                 drawLine(color = Color.Red.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
@@ -518,20 +513,33 @@ fun PriceChart(
                     }
                 }
 
-                // Bottom line and price marks
+                // Bottom line and special labels (Strømstøtte / Norgespris)
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f), end = androidx.compose.ui.geometry.Offset(size.width, 0f), strokeWidth = 2.dp.toPx())
-                        marks.forEach { mark ->
-                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(mark.toDouble())
-                            if (x in labelPaddingPx..size.width) {
-                                drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, 4.dp.toPx()), strokeWidth = 2.dp.toPx())
-                            }
-                        }
                     }
-                    marks.forEach { mark ->
-                        val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
-                        Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 5.dp), textAlign = TextAlign.Center, color = Color.Gray)
+                    val specialLines = if (isNorgespris) {
+                        listOf(effectiveMidpoint to "Norgespris")
+                    } else {
+                        listOf(stromstotteThreshold to "Strømstøtte", effectiveMidpoint to "Norgespris")
+                    }
+                    specialLines.forEach { (lineVal, labelText) ->
+                        val fraction = getXFraction(lineVal)
+                        if (fraction in 0f..1f) {
+                            val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
+                            val labelWidth = 65.dp
+                            val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
+                            val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
+                            val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
+
+                            Text(
+                                text = labelText,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = Color.Red),
+                                modifier = Modifier.align(Alignment.TopStart).width(labelWidth).offset(x = offset, y = 2.dp),
+                                textAlign = labelTextAlign,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }
