@@ -39,9 +39,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.roundToInt
+import kotlin.math.*
 
 private const val STROMSTOTTE_THRESHOLD_EX_VAT_ORE = 75.0
 private const val STROMSTOTTE_VAT_MULTIPLIER = 1.25
@@ -49,6 +47,8 @@ private const val NORGESPRIS_MIDPOINT_INCL_VAT_ORE = 50.0
 private const val NORGESPRIS_MIDPOINT_EX_VAT_ORE = NORGESPRIS_MIDPOINT_INCL_VAT_ORE / STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_THRESHOLD_INCL_VAT_ORE = STROMSTOTTE_THRESHOLD_EX_VAT_ORE * STROMSTOTTE_VAT_MULTIPLIER
 private const val STROMSTOTTE_SUBSIDY_PERCENTAGE = 0.90
+
+data class PriceInfo(val pricePoint: PricePoint, val effectivePrice: Double, val originalPrice: Double)
 
 class MainActivity : ComponentActivity() {
     private val refreshTrigger = mutableStateOf(0)
@@ -390,7 +390,7 @@ fun PriceChart(
                 .map { abs(it.originalPrice - effectiveMidpoint) }
                 .maxOfOrNull { it } ?: 1.0
         } else {
-            1.0 // Default value, not used when not in Norgespris mode
+            1.0
         }
     }
 
@@ -402,34 +402,15 @@ fun PriceChart(
 
     val (percentBelow, percentAbove) = remember(pricesInfo, isNorgespris, effectiveMidpoint) {
         if (isNorgespris && pricesInfo.isNotEmpty()) {
-            val sumBelow = pricesInfo
-                .map { effectiveMidpoint - it.originalPrice }
-                .filter { it > 0 }
-                .sum()
-
-            val sumAbove = pricesInfo
-                .map { it.originalPrice - effectiveMidpoint }
-                .filter { it > 0 }
-                .sum()
-
+            val sumBelow = pricesInfo.map { effectiveMidpoint - it.originalPrice }.filter { it > 0 }.sum()
+            val sumAbove = pricesInfo.map { it.originalPrice - effectiveMidpoint }.filter { it > 0 }.sum()
             val totalDeviation = sumBelow + sumAbove
-            if (totalDeviation > 0) {
-                val below = (sumBelow / totalDeviation * 100).toInt()
-                val above = 100 - below
-                Pair(below, above)
-            } else {
-                Pair(0, 0)
-            }
-        } else {
-            Pair(0, 0)
-        }
+            if (totalDeviation > 0) Pair((sumBelow / totalDeviation * 100).toInt(), (100 - (sumBelow / totalDeviation * 100).toInt())) else Pair(0, 0)
+        } else Pair(0, 0)
     }
 
     val stromstotteThreshold = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
-
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) }
-    val dateText = selectedDate.format(dateFormatter)
-
+    val dateText = selectedDate.format(remember { DateTimeFormatter.ofPattern("dd. MMMM yy", Locale.forLanguageTag("no-NO")) })
     val averagePriceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", averagePrice)
     val headerText = when {
         isStromstotte -> "Din pris etter strømstøtte for $dateText. Snitt: $averagePriceText"
@@ -438,15 +419,28 @@ fun PriceChart(
         else -> "Priser i øre/kWh eks. mva for $dateText. Snitt: $averagePriceText"
     }
 
-    val currentHour = currentTime.hour
+    val overallMin = remember(pricesInfo, isNorgespris, effectiveMidpoint, isStromstotte, minPrice, minOriginalPrice) {
+        if (isNorgespris) min(pricesInfo.minOfOrNull { it.originalPrice } ?: 0.0, effectiveMidpoint)
+        else if (isStromstotte) minPrice else minOriginalPrice
+    }
+    val overallMax = remember(pricesInfo, isNorgespris, effectiveMidpoint, isStromstotte, maxEffectivePrice, maxPriceForScaling) {
+        if (isNorgespris) max(pricesInfo.maxOfOrNull { it.originalPrice } ?: 0.0, effectiveMidpoint)
+        else if (isStromstotte) maxEffectivePrice else maxPriceForScaling
+    }
+    val chartRange = overallMax - overallMin
+
+    val marks = remember(overallMin, overallMax, chartRange) {
+        val list = mutableListOf<Int>()
+        if (chartRange <= 0) return@remember list
+        val step = when { chartRange < 50 -> 10; chartRange < 125 -> 25; else -> 50 }
+        var currentMark = (overallMin / step).toInt() * step
+        if (currentMark < overallMin) currentMark += step
+        while (currentMark <= overallMax) { list.add(currentMark.toInt()); currentMark += step }
+        list.take(5)
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
-        AutoResizeText(
-            text = headerText,
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-        )
+        AutoResizeText(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
             val scope = this
             val density = LocalDensity.current
@@ -455,165 +449,97 @@ fun PriceChart(
             val labelPadding = 24.dp
             val labelPaddingPx = with(density) { labelPadding.toPx() }
 
-            if (!isNorgespris && pricesInfo.isNotEmpty()) {
-                val overallMin = if (isStromstotte) minPrice else minOriginalPrice
-                val overallMax = if (isStromstotte) maxEffectivePrice else maxPriceForScaling
-                val range = overallMax - overallMin
-
-                val step = if (range < 50) 10 else if (range < 125) 25 else 50
-                val startValue = (overallMin / step).toInt() * step
-                val marks = mutableListOf<Int>()
-                var currentMark = startValue
-                while (currentMark <= overallMax) {
-                    if (currentMark >= overallMin) {
-                        marks.add(currentMark)
-                    }
-                    currentMark += step
+            fun getXFraction(value: Double): Float {
+                return if (isNorgespris) {
+                    if (maxAbsoluteDeviation > 0) 0.5f + ((value - effectiveMidpoint) / (2 * maxAbsoluteDeviation)).toFloat() else 0.5f
+                } else {
+                    if (chartRange > 0) minBarUiFraction + (1f - minBarUiFraction) * ((value - overallMin) / chartRange).toFloat() else 0.5f
                 }
-                if (marks.size > 5) {
-                    val filteredMarks = marks.take(5)
-                    marks.clear()
-                    marks.addAll(filteredMarks)
-                }
+            }
 
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Vertical background lines
-                            marks.forEach { mark ->
-                                val fraction = if (range > 0) {
-                                    val scaledFraction = ((mark - overallMin) / range).toFloat()
-                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                                } else 0.5f
-
-                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
-                                drawLine(
-                                    color = Color.Gray.copy(alpha = 0.5f),
-                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
-                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
-                                    strokeWidth = 2.dp.toPx()
-                                )
-                            }
-
-                            // Stromstotte reference line
-                            val stromstotteThresholdLine = if (isMva) STROMSTOTTE_THRESHOLD_INCL_VAT_ORE else STROMSTOTTE_THRESHOLD_EX_VAT_ORE
-                            if (stromstotteThresholdLine >= overallMin && stromstotteThresholdLine <= overallMax) {
-                                val fraction = if (range > 0) {
-                                    val scaledFraction = ((stromstotteThresholdLine - overallMin) / range).toFloat()
-                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                                } else 0.5f
-                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
-                                drawLine(
-                                    color = Color.Red.copy(alpha = 0.6f),
-                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
-                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
-                                    strokeWidth = 1.5.dp.toPx()
-                                )
-                            }
-
-                            // Norgespris reference line
-                            val norgesprisMidpointLine = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
-                            if (norgesprisMidpointLine >= overallMin && norgesprisMidpointLine <= overallMax) {
-                                val fraction = if (range > 0) {
-                                    val scaledFraction = ((norgesprisMidpointLine - overallMin) / range).toFloat()
-                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                                } else 0.5f
-                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
-                                drawLine(
-                                    color = Color.Red.copy(alpha = 0.6f),
-                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
-                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
-                                    strokeWidth = 1.5.dp.toPx()
-                                )
-                            }
-                        }
-
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(pricesInfo) { priceInfo ->
-                                ChartBar(
-                                    priceInfo = priceInfo,
-                                    maxPriceForScaling = maxPriceForScaling,
-                                    minOriginalPrice = minOriginalPrice,
-                                    minPrice = minPrice,
-                                    maxEffectivePrice = maxEffectivePrice,
-                                    stromstotteThreshold = stromstotteThreshold,
-                                    selectedDate = selectedDate,
-                                    currentHour = currentHour,
-                                    isNorgespris = isNorgespris,
-                                    isStromstotte = isStromstotte,
-                                    maxAbsoluteDeviation = maxAbsoluteDeviation,
-                                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
-                                )
-                            }
-                        }
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top labels and line
+                Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, size.height), end = androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2.dp.toPx())
                     }
-
-                    // Horizontal Axis and Labels
-                    Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawLine(
-                                color = Color.Black,
-                                start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f),
-                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                            marks.forEach { mark ->
-                                val fraction = if (range > 0) {
-                                    val scaledFraction = ((mark - overallMin) / range).toFloat()
-                                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                                } else 0.5f
-                                val x = labelPaddingPx + (maxWidthPx - labelPaddingPx) * fraction
-                                drawLine(
-                                    color = Color.Black,
-                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
-                                    end = androidx.compose.ui.geometry.Offset(x, 4.dp.toPx()),
-                                    strokeWidth = 2.dp.toPx()
-                                )
-                            }
-                        }
-                        marks.forEach { mark ->
-                            val fraction = if (range > 0) {
-                                val scaledFraction = ((mark - overallMin) / range).toFloat()
-                                minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                            } else 0.5f
+                    listOf(stromstotteThreshold, effectiveMidpoint).forEach { lineVal ->
+                        val labelText = if (lineVal == stromstotteThreshold) "Strømstøtte" else "Norgespris"
+                        val fraction = getXFraction(lineVal)
+                        if (fraction in 0f..1f) {
                             val xPos = labelPadding + (scope.maxWidth - labelPadding) * fraction
+                            val labelWidth = 65.dp
+                            val isTooFarRight = xPos + labelWidth / 2 > scope.maxWidth
+                            val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
+                            val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
+
                             Text(
-                                text = mark.toString(),
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 5.dp),
-                                textAlign = TextAlign.Center,
-                                color = Color.Gray
+                                text = labelText,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = Color.Red),
+                                modifier = Modifier.align(Alignment.BottomStart).width(labelWidth).offset(x = offset, y = (-2).dp),
+                                textAlign = labelTextAlign,
+                                softWrap = false
                             )
                         }
-
-                        // Reference Labels removal
                     }
                 }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(pricesInfo) { priceInfo ->
-                        ChartBar(
-                            priceInfo = priceInfo,
-                            maxPriceForScaling = maxPriceForScaling,
-                            minOriginalPrice = minOriginalPrice,
-                            minPrice = minPrice,
-                            maxEffectivePrice = maxEffectivePrice,
-                            stromstotteThreshold = stromstotteThreshold,
-                            selectedDate = selectedDate,
-                            currentHour = currentHour,
-                            isNorgespris = isNorgespris,
-                            isStromstotte = isStromstotte,
-                            maxAbsoluteDeviation = maxAbsoluteDeviation,
-                            modifier = Modifier.fillParentMaxHeight(1f / 24f)
-                        )
+
+                Box(modifier = Modifier.weight(1f)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        // Grid lines
+                        marks.forEach { mark ->
+                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(mark.toDouble())
+                            if (x in labelPaddingPx..size.width) {
+                                drawLine(color = Color.Gray.copy(alpha = 0.5f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+                            }
+                        }
+                        // Red lines
+                        listOf(stromstotteThreshold, effectiveMidpoint).forEach { lineVal ->
+                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(lineVal)
+                            if (x in labelPaddingPx..size.width) {
+                                drawLine(color = Color.Red.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+                            }
+                        }
+                    }
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(items = pricesInfo) { priceInfo ->
+                            ChartBar(
+                                priceInfo = priceInfo,
+                                maxPriceForScaling = maxPriceForScaling,
+                                minOriginalPrice = minOriginalPrice,
+                                minPrice = minPrice,
+                                maxEffectivePrice = maxEffectivePrice,
+                                selectedDate = selectedDate,
+                                currentHour = currentTime.hour,
+                                isNorgespris = isNorgespris,
+                                isStromstotte = isStromstotte,
+                                maxAbsoluteDeviation = maxAbsoluteDeviation,
+                                modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                            )
+                        }
+                    }
+                }
+
+                // Bottom line and price marks
+                Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f), end = androidx.compose.ui.geometry.Offset(size.width, 0f), strokeWidth = 2.dp.toPx())
+                        marks.forEach { mark ->
+                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(mark.toDouble())
+                            if (x in labelPaddingPx..size.width) {
+                                drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, 4.dp.toPx()), strokeWidth = 2.dp.toPx())
+                            }
+                        }
+                    }
+                    marks.forEach { mark ->
+                        val xPos = labelPadding + (scope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
+                        Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.TopStart).offset(x = xPos - 12.dp, y = 5.dp), textAlign = TextAlign.Center, color = Color.Gray)
                     }
                 }
             }
         }
     }
 }
-
-data class PriceInfo(val pricePoint: PricePoint, val effectivePrice: Double, val originalPrice: Double)
 
 @Composable
 fun ChartBar(
@@ -622,7 +548,6 @@ fun ChartBar(
     minOriginalPrice: Double,
     minPrice: Double,
     maxEffectivePrice: Double,
-    stromstotteThreshold: Double,
     selectedDate: LocalDate,
     currentHour: Int,
     isNorgespris: Boolean,
@@ -631,38 +556,13 @@ fun ChartBar(
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
-    val hour = remember(priceInfo.pricePoint.time_start) {
-        timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(priceInfo.pricePoint.time_start))
-    }
+    val hour = remember(priceInfo.pricePoint.time_start) { timeFormatter.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(priceInfo.pricePoint.time_start)) }
     val priceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", priceInfo.effectivePrice)
-    val isCurrentHour = remember(hour, currentHour, selectedDate) {
-        hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
-    }
+    val isCurrentHour = hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
 
-    Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 1.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = hour,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.width(24.dp),
-            color = if (isCurrentHour) Color.Red else Color.Unspecified,
-            fontWeight = if (isCurrentHour) FontWeight.Bold else null
-        )
-
-        DefaultBar(
-            priceInfo = priceInfo,
-            maxPriceForScaling = maxPriceForScaling,
-            minOriginalPrice = minOriginalPrice,
-            minPrice = minPrice,
-            maxEffectivePrice = maxEffectivePrice,
-            stromstotteThreshold = stromstotteThreshold,
-            priceText = priceText,
-            isNorgespris = isNorgespris,
-            isStromstotte = isStromstotte,
-            maxAbsoluteDeviation = maxAbsoluteDeviation
-        )
+    Row(modifier = modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp), color = if (isCurrentHour) Color.Red else Color.Unspecified, fontWeight = if (isCurrentHour) FontWeight.Bold else null)
+        DefaultBar(priceInfo = priceInfo, maxPriceForScaling = maxPriceForScaling, minOriginalPrice = minOriginalPrice, minPrice = minPrice, maxEffectivePrice = maxEffectivePrice, priceText = priceText, isNorgespris = isNorgespris, isStromstotte = isStromstotte, maxAbsoluteDeviation = maxAbsoluteDeviation)
     }
 }
 
@@ -673,207 +573,63 @@ fun DefaultBar(
     minOriginalPrice: Double,
     minPrice: Double,
     maxEffectivePrice: Double,
-    stromstotteThreshold: Double,
     priceText: String,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
     maxAbsoluteDeviation: Double
 ) {
     if (isNorgespris) {
-        val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1 // Simple check if VAT is added
+        val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1
         val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
-
         val priceBelowMidpointValue = max(0.0, effectiveMidpoint - priceInfo.originalPrice)
         val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - effectiveMidpoint)
-
         val belowFraction = if (maxAbsoluteDeviation > 0) (priceBelowMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
         val aboveFraction = if (maxAbsoluteDeviation > 0) (priceAboveMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
-
         val colorRange = max(1.0, maxPriceForScaling) - minOriginalPrice
-        val colorFraction = if (colorRange > 0) {
-            ((priceInfo.originalPrice - minOriginalPrice) / colorRange).toFloat().coerceIn(0f, 1f)
-        } else {
-            0f
-        }
+        val colorFraction = if (colorRange > 0) ((priceInfo.originalPrice - minOriginalPrice) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
         val baseBarColor = if (priceInfo.originalPrice < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
         val textColorInside = if (luminance > 0.5) Color.Black else Color.White
         val textColorOutside = MaterialTheme.colorScheme.onSurface
 
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            // Left bar (below midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
-                if (priceInfo.originalPrice < effectiveMidpoint) {
-                    val roundedBelow = priceBelowMidpointValue.roundToInt()
-                    if (roundedBelow > 0) {
-                        val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", roundedBelow)
-                        val barIsShort = belowFraction < 0.2f
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(belowFraction)
-                                .background(baseBarColor),
-                            contentAlignment = Alignment.CenterEnd
-                        ) {
-                            if (!barIsShort) {
-                                Text(
-                                    text = textBelow,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = textColorInside,
-                                    modifier = Modifier.padding(end = 4.dp),
-                                    textAlign = TextAlign.End,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                        if (barIsShort) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = textBelow,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = textColorOutside,
-                                    modifier = Modifier.padding(end = 4.dp),
-                                    softWrap = false,
-                                )
-                                Spacer(Modifier.fillMaxWidth(belowFraction))
-                            }
-                        }
-                    }
+                if (priceInfo.originalPrice < effectiveMidpoint && (priceBelowMidpointValue.roundToInt() > 0)) {
+                    val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", priceBelowMidpointValue.roundToInt())
+                    val barIsShort = belowFraction < 0.2f
+                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(belowFraction).background(baseBarColor), contentAlignment = Alignment.CenterEnd) { if (!barIsShort) Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = textColorInside, modifier = Modifier.padding(end = 4.dp), textAlign = TextAlign.End, softWrap = false) }
+                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = textColorOutside, modifier = Modifier.padding(end = 4.dp), softWrap = false); Spacer(Modifier.fillMaxWidth(belowFraction)) }
                 }
             }
-
-            // Center divider
             Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
-
-            // Right bar (above midpoint)
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
                 if (priceInfo.originalPrice >= effectiveMidpoint) {
-                    val roundedAbove = priceAboveMidpointValue.roundToInt()
-                    val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", roundedAbove)
+                    val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", priceAboveMidpointValue.roundToInt())
                     val barIsShort = aboveFraction < 0.2f
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(aboveFraction)
-                            .background(baseBarColor),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (!barIsShort) {
-                            Text(
-                                text = textAbove,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textColorInside,
-                                modifier = Modifier.padding(start = 4.dp),
-                                softWrap = false
-                            )
-                        }
-                    }
-                    if (barIsShort) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start, modifier = Modifier.fillMaxWidth()) {
-                            Spacer(Modifier.fillMaxWidth(aboveFraction))
-                            Text(
-                                text = textAbove,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textColorOutside,
-                                modifier = Modifier.padding(start = 4.dp),
-                                softWrap = false,
-                            )
-                        }
-                    }
+                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(aboveFraction).background(baseBarColor), contentAlignment = Alignment.CenterStart) { if (!barIsShort) Text(text = textAbove, style = MaterialTheme.typography.bodySmall, color = textColorInside, modifier = Modifier.padding(start = 4.dp), softWrap = false) }
+                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start, modifier = Modifier.fillMaxWidth()) { Spacer(Modifier.fillMaxWidth(aboveFraction)); Text(text = textAbove, style = MaterialTheme.typography.bodySmall, color = textColorOutside, modifier = Modifier.padding(start = 4.dp), softWrap = false) }
                 }
             }
         }
     } else {
-        // Original logic for default and stromstotte views
         val priceInOre = priceInfo.effectivePrice
-        val originalPrice = priceInfo.originalPrice
         val colorRange = maxEffectivePrice - minPrice
-        val colorFraction = if (colorRange > 0) {
-            ((priceInOre - minPrice) / colorRange).toFloat().coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-
+        val colorFraction = if (colorRange > 0) ((priceInOre - minPrice) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
         val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
         val textColor = if (luminance > 0.5) Color.Black else Color.White
         val minBarUiFraction = 0.14f
-
-        val fullBarFraction = when {
-            isStromstotte -> {
-                val range = maxEffectivePrice - minPrice
-                val fraction = if (range > 0) {
-                    val scaledFraction = ((priceInOre - minPrice) / range).toFloat()
-                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                } else {
-                    if (priceInOre > 0) 0.5f else 0f
-                }
-                fraction.coerceIn(0f, 1f)
-            }
-            else -> { // Default view
-                val maxOriginalPrice = maxPriceForScaling
-                val range = maxOriginalPrice - minOriginalPrice
-                val fraction = if (range > 0) {
-                    val scaledFraction = ((originalPrice - minOriginalPrice) / range).toFloat()
-                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
-                } else {
-                    if (originalPrice > 0) 0.5f else 0f
-                }
-                fraction.coerceIn(0f, 1f)
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fullBarFraction),
-            contentAlignment = Alignment.CenterStart
-        ) {
+        val fullBarFraction = (if (isStromstotte) { if (maxEffectivePrice - minPrice > 0) minBarUiFraction + (1f - minBarUiFraction) * ((priceInOre - minPrice) / (maxEffectivePrice - minPrice)).toFloat() else if (priceInOre > 0) 0.5f else 0f } else { if (maxPriceForScaling - minOriginalPrice > 0) minBarUiFraction + (1f - minBarUiFraction) * ((priceInfo.originalPrice - minOriginalPrice) / (maxPriceForScaling - minOriginalPrice)).toFloat() else if (priceInfo.originalPrice > 0) 0.5f else 0f }).coerceIn(0f, 1f)
+        Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fullBarFraction), contentAlignment = Alignment.CenterStart) {
             Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
-
-            Text(
-                text = priceText,
-                style = MaterialTheme.typography.bodySmall,
-                color = textColor,
-                modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart)
-            )
+            Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = textColor, modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart))
         }
     }
 }
 
 @Composable
-fun AutoResizeText(
-    text: String,
-    style: TextStyle,
-    modifier: Modifier = Modifier,
-    textAlign: TextAlign? = null
-) {
+fun AutoResizeText(text: String, style: TextStyle, modifier: Modifier = Modifier, textAlign: TextAlign? = null) {
     var resizedTextStyle by remember(text, style) { mutableStateOf(style) }
     var shouldDraw by remember { mutableStateOf(false) }
-
-    Text(
-        text = text,
-        modifier = modifier.drawWithContent {
-            if (shouldDraw) {
-                drawContent()
-            }
-        },
-        style = resizedTextStyle,
-        maxLines = 1,
-        softWrap = false,
-        textAlign = textAlign,
-        onTextLayout = { result ->
-            if (result.hasVisualOverflow) {
-                if (resizedTextStyle.fontSize != TextUnit.Unspecified) {
-                    resizedTextStyle = resizedTextStyle.copy(
-                        fontSize = resizedTextStyle.fontSize * 0.95f
-                    )
-                }
-            } else {
-                shouldDraw = true
-            }
-        }
-    )
+    Text(text = text, modifier = modifier.drawWithContent { if (shouldDraw) drawContent() }, style = resizedTextStyle, maxLines = 1, softWrap = false, textAlign = textAlign, onTextLayout = { result -> if (result.hasVisualOverflow) { if (resizedTextStyle.fontSize != TextUnit.Unspecified) { resizedTextStyle = resizedTextStyle.copy(fontSize = resizedTextStyle.fontSize * 0.95f) } } else { shouldDraw = true } })
 }
