@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -51,7 +50,7 @@ private const val STROMSTOTTE_SUBSIDY_PERCENTAGE = 0.90
 data class PriceInfo(val pricePoint: PricePoint, val effectivePrice: Double, val originalPrice: Double)
 
 class MainActivity : ComponentActivity() {
-    private val refreshTrigger = mutableStateOf(0)
+    private val refreshTrigger = mutableIntStateOf(0)
     private var lastPauseTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +63,7 @@ class MainActivity : ComponentActivity() {
             Android_elprisTheme {
                 PriceScreen(
                     modifier = Modifier.fillMaxSize(),
-                    refreshTrigger = refreshTrigger.value
+                    refreshTrigger = refreshTrigger.intValue
                 )
             }
         }
@@ -88,7 +87,7 @@ class MainActivity : ComponentActivity() {
         val currentCal = java.util.Calendar.getInstance().apply { timeInMillis = currentTime }
 
         if (currentTime - lastPauseTime > hourInMillis || lastCal.get(java.util.Calendar.HOUR_OF_DAY) != currentCal.get(java.util.Calendar.HOUR_OF_DAY)) {
-            refreshTrigger.value++
+            refreshTrigger.intValue++
         }
     }
 }
@@ -435,7 +434,7 @@ fun PriceChart(
         val step = when { chartRange < 50 -> 10; chartRange < 125 -> 25; else -> 50 }
         var currentMark = (overallMin / step).toInt() * step
         if (currentMark < overallMin) currentMark += step
-        while (currentMark <= overallMax) { list.add(currentMark.toInt()); currentMark += step }
+        while (currentMark <= overallMax) { list.add(currentMark); currentMark += step }
         list.take(5)
     }
 
@@ -444,7 +443,6 @@ fun PriceChart(
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
             val scope = this
             val density = LocalDensity.current
-            val maxWidthPx = with(density) { scope.maxWidth.toPx() }
             val minBarUiFraction = 0.14f
             val labelPadding = 24.dp
             val labelPaddingPx = with(density) { labelPadding.toPx() }
@@ -629,7 +627,29 @@ fun DefaultBar(
 
 @Composable
 fun AutoResizeText(text: String, style: TextStyle, modifier: Modifier = Modifier, textAlign: TextAlign? = null) {
-    var resizedTextStyle by remember(text, style) { mutableStateOf(style) }
+    val resizedTextStyleState = remember(text, style) { mutableStateOf(style) }
     var shouldDraw by remember { mutableStateOf(false) }
-    Text(text = text, modifier = modifier.drawWithContent { if (shouldDraw) drawContent() }, style = resizedTextStyle, maxLines = 1, softWrap = false, textAlign = textAlign, onTextLayout = { result -> if (result.hasVisualOverflow) { if (resizedTextStyle.fontSize != TextUnit.Unspecified) { resizedTextStyle = resizedTextStyle.copy(fontSize = resizedTextStyle.fontSize * 0.95f) } } else { shouldDraw = true } })
+
+    Text(
+        text = text,
+        modifier = modifier.drawWithContent {
+            if (shouldDraw) {
+                drawContent()
+            }
+        },
+        style = resizedTextStyleState.value,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = textAlign,
+        onTextLayout = { result ->
+            if (result.hasVisualOverflow) {
+                val currentSize = resizedTextStyleState.value.fontSize
+                if (currentSize != TextUnit.Unspecified) {
+                    resizedTextStyleState.value = resizedTextStyleState.value.copy(fontSize = currentSize * 0.95f)
+                }
+            } else {
+                shouldDraw = true
+            }
+        }
+    )
 }
