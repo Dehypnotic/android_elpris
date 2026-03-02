@@ -44,6 +44,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.round
+import androidx.compose.ui.layout.Layout
+import androidx.compose.foundation.text.BasicTextField
 
 private const val VAT_MULTIPLIER = 1.25
 
@@ -274,7 +277,7 @@ fun BottomBar(
                     var textFieldValue by remember(otherFeesAmount) {
                         mutableStateOf(if (otherFeesAmount == 0f) "" else otherFeesAmount.toString().replace('.', ','))
                     }
-                    OutlinedTextField(
+                    BasicTextField(
                         value = textFieldValue,
                         onValueChange = { newValue: String ->
                             val sanitized = newValue.replace(',', '.')
@@ -285,12 +288,31 @@ fun BottomBar(
                             }
                         },
                         modifier = Modifier
-                            .width(80.dp)
-                            .height(56.dp),
-                        label = { Text("Beløb", style = MaterialTheme.typography.labelSmall) },
+                            .width(60.dp)
+                            .height(24.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.extraSmall)
+                            .padding(horizontal = 4.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodySmall
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                if (textFieldValue.isEmpty()) {
+                                    Text(
+                                        "0,0",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
                     )
                 }
             }
@@ -384,6 +406,11 @@ fun PriceChart(
 
     val maxPriceForScaling = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.originalPrice } ?: 1.0 }
     val minOriginalPrice = remember(pricesInfo) { pricesInfo.filter { it.originalPrice >= 0 }.minOfOrNull { it.originalPrice } ?: 0.0 }
+
+    // Use effective prices for grid if other fees are enabled
+    val gridPriceMin = if (isOtherFees) pricesInfo.minOfOrNull { it.effectivePrice } ?: 0.0 else minOriginalPrice
+    val gridPriceMax = if (isOtherFees) pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 else maxPriceForScaling
+
     val minPrice = remember(pricesInfo) { pricesInfo.filter { it.effectivePrice >= 0 }.minOfOrNull { it.effectivePrice } ?: 0.0 }
     val maxEffectivePrice = remember(pricesInfo) { pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0 }
 
@@ -401,22 +428,20 @@ fun PriceChart(
 
     val currentHour = currentTime.hour
 
-    val gridLines = remember(minOriginalPrice, maxPriceForScaling) {
-        val diff = maxPriceForScaling - minOriginalPrice
+    val gridLines = remember(gridPriceMin, gridPriceMax) {
+        val diff = gridPriceMax - gridPriceMin
         val step = when {
             diff <= 50 -> 10.0
             diff <= 125 -> 25.0
             else -> 50.0
         }
         val lines = mutableListOf<Double>()
-        var current = ceil(minOriginalPrice / step) * step
-        while (current <= maxPriceForScaling) {
+        var current = ceil(gridPriceMin / step) * step
+        while (current <= gridPriceMax) {
             lines.add(current)
             current += step
         }
-        // Limit to max 5 lines as requested
         if (lines.size > 5) {
-            // If too many lines, take a subset or just keep the first 5
             lines.take(5)
         } else {
             lines
@@ -434,21 +459,21 @@ fun PriceChart(
             // Grid lines in the background
             Canvas(modifier = Modifier.fillMaxSize().padding(start = 24.dp)) { // 24.dp matches hour Label width
                 val minBarUiFraction = 0.14f
-                val range = maxPriceForScaling - minOriginalPrice
+                val range = gridPriceMax - gridPriceMin
 
                 gridLines.forEach { price ->
                     val fraction = if (range > 0) {
-                        val scaledFraction = ((price - minOriginalPrice) / range).toFloat()
+                        val scaledFraction = ((price - gridPriceMin) / range).toFloat()
                         minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
                     } else {
                         0.5f
                     }
                     val x = size.width * fraction.coerceIn(0f, 1f)
                     drawLine(
-                        color = Color.LightGray.copy(alpha = 0.5f),
+                        color = Color(0xFFD3D3D3), // Solid LightGray for consistent look
                         start = Offset(x, 0f),
                         end = Offset(x, size.height),
-                        strokeWidth = 1.dp.toPx()
+                        strokeWidth = 1.5.dp.toPx()
                     )
                 }
             }
@@ -457,8 +482,8 @@ fun PriceChart(
                 items(pricesInfo) { priceInfo ->
                     ChartBar(
                         priceInfo = priceInfo,
-                        maxPriceForScaling = maxPriceForScaling,
-                        minOriginalPrice = minOriginalPrice,
+                        maxPriceForScaling = gridPriceMax,
+                        minOriginalPrice = gridPriceMin,
                         minPrice = minPrice,
                         maxEffectivePrice = maxEffectivePrice,
                         selectedDate = selectedDate,
@@ -496,31 +521,40 @@ fun PriceChart(
                 Spacer(modifier = Modifier.width(24.dp)) // Match hour label width
                 Box(modifier = Modifier.fillMaxWidth()) {
                     val minBarUiFraction = 0.14f
-                    val range = maxPriceForScaling - minOriginalPrice
+                    val range = gridPriceMax - gridPriceMin
 
                     gridLines.forEach { price ->
                         val fraction = if (range > 0) {
-                            val scaledFraction = ((price - minOriginalPrice) / range).toFloat()
+                            val scaledFraction = ((price - gridPriceMin) / range).toFloat()
                             minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
                         } else {
                             0.5f
                         }
 
-                        // Centering the text under the line:
-                        // We use a Box with fillMaxWidth(fraction) and a child that is aligned to CenterEnd,
-                        // but then offset by half its estimate width to truly center it.
-                        // Or simpler: use an absolute offset based on size.
+                        // Centering the text under the line using Box and fractional width
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(fraction.coerceIn(0f, 1f)),
                             contentAlignment = Alignment.CenterEnd
                         ) {
-                            Text(
-                                text = price.toInt().toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.offset(x = 10.dp), // Offset forward slightly to center the digits
-                                textAlign = TextAlign.Center
-                            )
+                            // Use Layout to offset the element itself by half its width for true centering
+                            // Actually, simpler to just use a fixed small container and center it at the end
+                            Box(
+                                modifier = Modifier
+                                    .width(0.dp) // Zero width container at the fraction point
+                                    .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    // Vertical tick mark
+                                    Box(modifier = Modifier.width(1.dp).height(4.dp).background(Color.Gray))
+                                    Text(
+                                        text = price.toInt().toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        textAlign = TextAlign.Center,
+                                        softWrap = false
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -585,7 +619,6 @@ fun DefaultBar(
     priceText: String
 ) {
     val priceInOre = priceInfo.effectivePrice
-    val originalPrice = priceInfo.originalPrice
     val colorRange = maxEffectivePrice - minPrice
     val colorFraction = if (colorRange > 0) {
         ((priceInOre - minPrice) / colorRange).toFloat().coerceIn(0f, 1f)
@@ -600,12 +633,12 @@ fun DefaultBar(
 
     val range = maxPriceForScaling - minOriginalPrice
     val fraction = if (range > 0) {
-        val scaledFraction = ((originalPrice - minOriginalPrice) / range).toFloat()
+        val scaledFraction = ((priceInOre - minOriginalPrice) / range).toFloat()
         minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
     } else {
-        if (originalPrice > 0) 0.5f else 0f
+        if (priceInOre > 0) 1.0f else minBarUiFraction
     }
-    val fullBarFraction = fraction.coerceIn(0f, 1f)
+    val fullBarFraction = fraction.coerceIn(minBarUiFraction, 1f)
 
     Box(
         modifier = Modifier
