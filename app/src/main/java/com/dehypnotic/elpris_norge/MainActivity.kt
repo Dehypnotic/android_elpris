@@ -426,7 +426,8 @@ fun PriceChart(
         if (isNorgespris) min(pricesInfo.minOfOrNull { it.originalPrice } ?: 0.0, effectiveMidpoint)
         else {
             val actualMin = pricesInfo.minOfOrNull { it.effectivePrice } ?: 0.0
-            min(0.0, actualMin)
+            val dataMin = if (isStromstotte) minPrice else minOriginalPrice
+            if (actualMin < 0) min(0.0, actualMin) else dataMin
         }
     }
     val overallMax = remember(pricesInfo, isNorgespris, effectiveMidpoint, isStromstotte, maxEffectivePrice, maxPriceForScaling) {
@@ -495,12 +496,12 @@ fun PriceChart(
                                 drawLine(color = Color.Gray.copy(alpha = 0.5f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
                             }
                         }
-                        // Red lines
+                        // Red lines replaced with dynamic theme color
                         val specialLineValues = if (isNorgespris) listOf(effectiveMidpoint) else listOf(stromstotteThreshold, effectiveMidpoint)
                         specialLineValues.forEach { lineVal ->
                             val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(lineVal)
                             if (x in labelPaddingPx..size.width) {
-                                drawLine(color = Color.Red.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+                                drawLine(color = axisColor.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
                             }
                         }
                     }
@@ -536,21 +537,24 @@ fun PriceChart(
                         listOf(stromstotteThreshold to "Strømstøtte", effectiveMidpoint to "Norgespris")
                     }
                     specialLines.forEach { (lineVal, labelText) ->
-                        val fraction = getXFraction(lineVal)
-                        if (fraction in 0f..1f) {
-                            val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
-                            val labelWidth = 65.dp
-                            val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
-                            val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
-                            val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
+                        // Only show if the value is within the chart's price range
+                        if (lineVal in overallMin..overallMax) {
+                            val fraction = getXFraction(lineVal)
+                            if (fraction in 0f..1f) {
+                                val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
+                                val labelWidth = 65.dp
+                                val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
+                                val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
+                                val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
 
-                            Text(
-                                text = labelText,
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = Color.Red),
-                                modifier = Modifier.align(Alignment.TopStart).width(labelWidth).offset(x = offset, y = 2.dp),
-                                textAlign = labelTextAlign,
-                                softWrap = false
-                            )
+                                Text(
+                                    text = labelText,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = axisColor),
+                                    modifier = Modifier.align(Alignment.TopStart).width(labelWidth).offset(x = offset, y = 2.dp),
+                                    textAlign = labelTextAlign,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
@@ -620,11 +624,13 @@ fun DefaultBar(
         val priceAboveMidpointValue = max(0.0, priceInfo.originalPrice - effectiveMidpoint)
         val belowFraction = if (maxAbsoluteDeviation > 0) (priceBelowMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
         val aboveFraction = if (maxAbsoluteDeviation > 0) (priceAboveMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
-        val colorRange = max(1.0, maxPriceForScaling) - minOriginalPrice
-        val colorFraction = if (colorRange > 0) ((priceInfo.originalPrice - minOriginalPrice) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
-        val baseBarColor = if (priceInfo.originalPrice < 0) {
-            if (isDarkTheme) Color.White else Color.Black
-        } else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
+
+        // Use overall range for color to include negative prices
+        val colorMin = min(chartOverallMin, minOriginalPrice)
+        val colorRange = max(1.0, maxPriceForScaling) - colorMin
+        val colorFraction = if (colorRange > 0) ((priceInfo.originalPrice - colorMin) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
+        val baseBarColor = Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
+
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
         val textColorInside = if (luminance > 0.5) Color.Black else Color.White
         val textColorOutside = MaterialTheme.colorScheme.onSurface
@@ -633,16 +639,16 @@ fun DefaultBar(
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
                 if (priceInfo.originalPrice < effectiveMidpoint && (priceBelowMidpointValue.roundToInt() > 0)) {
                     val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", priceBelowMidpointValue.roundToInt())
-                    val barIsShort = belowFraction < 0.2f
+                    val barIsShort = belowFraction < 0.07f
                     Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(belowFraction).background(baseBarColor), contentAlignment = Alignment.CenterEnd) { if (!barIsShort) Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = textColorInside, modifier = Modifier.padding(end = 4.dp), textAlign = TextAlign.End, softWrap = false) }
-                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = if (priceInfo.originalPrice < 0) baseBarColor else textColorOutside, modifier = Modifier.padding(end = 4.dp), softWrap = false); Spacer(Modifier.fillMaxWidth(belowFraction)) }
+                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = if (priceInfo.originalPrice < colorMin + (maxPriceForScaling - colorMin) * 0.1) baseBarColor else textColorOutside, modifier = Modifier.padding(end = 4.dp), softWrap = false); Spacer(Modifier.fillMaxWidth(belowFraction)) }
                 }
             }
             Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
             Box(modifier = Modifier.weight(0.5f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
                 if (priceInfo.originalPrice >= effectiveMidpoint) {
                     val textAbove = String.format(Locale.forLanguageTag("no-NO"), "%d", priceAboveMidpointValue.roundToInt())
-                    val barIsShort = aboveFraction < 0.2f
+                    val barIsShort = aboveFraction < 0.05f
                     Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(aboveFraction).background(baseBarColor), contentAlignment = Alignment.CenterStart) { if (!barIsShort) Text(text = textAbove, style = MaterialTheme.typography.bodySmall, color = textColorInside, modifier = Modifier.padding(start = 4.dp), softWrap = false) }
                     if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start, modifier = Modifier.fillMaxWidth()) { Spacer(Modifier.fillMaxWidth(aboveFraction)); Text(text = textAbove, style = MaterialTheme.typography.bodySmall, color = textColorOutside, modifier = Modifier.padding(start = 4.dp), softWrap = false) }
                 }
@@ -657,11 +663,10 @@ fun DefaultBar(
         val zeroFraction = ((0.0 - chartOverallMin) / range).toFloat().coerceIn(0f, 1f)
         val priceFraction = ((priceInOre - chartOverallMin) / range).toFloat().coerceIn(0f, 1f)
 
-        val colorRange = maxPriceVal - minPriceVal
-        val colorFraction = if (colorRange > 0) ((priceInOre - minPriceVal) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
-        val baseBarColor = if (priceInOre < 0) {
-            if (isDarkTheme) Color.White else Color.Black
-        } else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
+        // Use the chart's overall range for color scaling to include negative prices
+        val colorRange = chartOverallMax - chartOverallMin
+        val colorFraction = if (colorRange > 0) ((priceInOre - chartOverallMin) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
+        val baseBarColor = Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
 
         if (priceInOre < 0) {
             val leftFraction = priceFraction.coerceIn(0f, 1f)
@@ -678,7 +683,7 @@ fun DefaultBar(
                 }
             }
         } else {
-            val minBarUiFraction = 0.05f
+            val minBarUiFraction = 0.08f
             val rawBarFraction = (priceFraction - zeroFraction).coerceAtLeast(0f)
             val barFraction = max(rawBarFraction, min(minBarUiFraction, 1f - zeroFraction))
             val rightFraction = (1f - zeroFraction - barFraction).coerceAtLeast(0f)
