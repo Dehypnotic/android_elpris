@@ -40,6 +40,8 @@ import java.util.Locale
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import kotlin.math.ceil
+import kotlin.math.floor
 
 private const val VAT_MULTIPLIER = 1.255
 
@@ -112,7 +114,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
     }
 
     var otherFeesValue by remember {
-        mutableStateOf(sharedPrefs.getFloat("other_fees_value", 0f))
+        mutableFloatStateOf(sharedPrefs.getFloat("other_fees_value", 0f))
     }
 
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -419,8 +421,8 @@ fun PriceChart(
                 else -> 50.0
             }
 
-            val startMark = (Math.ceil(minOriginalPrice / step) * step).toInt()
-            val endMark = (Math.floor(maxPriceForScaling / step) * step).toInt()
+            val startMark = (ceil(minOriginalPrice / step) * step).toInt()
+            val endMark = (floor(maxPriceForScaling / step) * step).toInt()
             val marks = if (startMark <= endMark) {
                 (startMark..endMark step step.toInt()).map { it.toDouble() }
             } else {
