@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -569,7 +570,7 @@ fun ChartBar(
     val priceText = String.format(Locale.forLanguageTag("no-NO"), "%.2f", priceInfo.effectivePrice)
     val isCurrentHour = hour.toIntOrNull() == currentHour && selectedDate.isEqual(LocalDate.now())
 
-    Row(modifier = modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp), color = if (isCurrentHour) Color.Red else Color.Unspecified, fontWeight = if (isCurrentHour) FontWeight.Bold else null)
         DefaultBar(priceInfo = priceInfo, maxPriceForScaling = maxPriceForScaling, minOriginalPrice = minOriginalPrice, minPrice = minPrice, maxEffectivePrice = maxEffectivePrice, priceText = priceText, isNorgespris = isNorgespris, isStromstotte = isStromstotte, maxAbsoluteDeviation = maxAbsoluteDeviation)
     }
