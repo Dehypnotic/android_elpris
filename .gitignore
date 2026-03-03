@@ -5,7 +5,7 @@ gradle/
 /app/release/
 build/
 /*/build/
-
+git rm -r --cached .idea
 # Lokale innstillinger (viktig! Inneholder din sti til SDK)
 local.properties
 
