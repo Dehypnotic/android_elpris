@@ -497,11 +497,18 @@ fun PriceChart(
                             }
                         }
                         // Red lines replaced with dynamic theme color
-                        val specialLineValues = if (isNorgespris) listOf(effectiveMidpoint) else listOf(stromstotteThreshold, effectiveMidpoint)
+                        val specialLineValues = if (isNorgespris) {
+                            listOf(effectiveMidpoint)
+                        } else {
+                            listOf(stromstotteThreshold, effectiveMidpoint)
+                        }
                         specialLineValues.forEach { lineVal ->
-                            val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(lineVal)
-                            if (x in labelPaddingPx..size.width) {
-                                drawLine(color = axisColor.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+                            // Use a small epsilon to avoid drawing lines exactly on the boundary which may look like a frame
+                            if (lineVal > overallMin + 0.01 && lineVal < overallMax - 0.01) {
+                                val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(lineVal)
+                                if (x in labelPaddingPx..size.width) {
+                                    drawLine(color = axisColor.copy(alpha = 0.6f), start = androidx.compose.ui.geometry.Offset(x, 0f), end = androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+                                }
                             }
                         }
                     }
@@ -537,8 +544,8 @@ fun PriceChart(
                         listOf(stromstotteThreshold to "Strømstøtte", effectiveMidpoint to "Norgespris")
                     }
                     specialLines.forEach { (lineVal, labelText) ->
-                        // Only show if the value is within the chart's price range
-                        if (lineVal in overallMin..overallMax) {
+                        // Only show if the value is within the chart's price range, with a small safety margin
+                        if (lineVal > overallMin + 0.01 && lineVal < overallMax - 0.01) {
                             val fraction = getXFraction(lineVal)
                             if (fraction in 0f..1f) {
                                 val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
@@ -678,12 +685,13 @@ fun DefaultBar(
                 if (barFraction > 0f) {
                     Box(modifier = Modifier.weight(barFraction).fillMaxHeight().background(baseBarColor))
                 }
-                Box(modifier = Modifier.weight(max(0.0001f, rightFraction)).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                val remainingWeight = (1f - zeroFraction - barFraction).coerceAtLeast(0.0001f)
+                Box(modifier = Modifier.weight(remainingWeight).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
                     Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = Color.Red, modifier = Modifier.padding(start = 4.dp))
                 }
             }
         } else {
-            val minBarUiFraction = 0.08f
+            val minBarUiFraction = 0.1f
             val rawBarFraction = (priceFraction - zeroFraction).coerceAtLeast(0f)
             val barFraction = max(rawBarFraction, min(minBarUiFraction, 1f - zeroFraction))
             val rightFraction = (1f - zeroFraction - barFraction).coerceAtLeast(0f)
