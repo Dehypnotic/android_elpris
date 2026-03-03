@@ -407,13 +407,14 @@ fun PriceChart(
         )
 
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            val chartWidth = maxWidth
-            val chartHeight = maxHeight
+            val scope = this
+            val chartWidth = scope.maxWidth
+            val chartHeight = scope.maxHeight
 
             // Vertical lines and price labels logic
             val priceRange = maxPriceForScaling - minOriginalPrice
             val step = when {
-                priceRange <= 50 -> 10.0
+                priceRange <= 50 -> 5.0
                 priceRange <= 125 -> 25.0
                 else -> 50.0
             }
@@ -452,7 +453,7 @@ fun PriceChart(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(1.dp)
-                        .offset(x = chartWidth * fraction)
+                        .offset(x = scope.maxWidth * fraction)
                         .background(if (isSystemInDarkTheme()) Color.Gray.copy(alpha = 0.5f) else Color.LightGray)
                 )
             }
@@ -489,7 +490,7 @@ fun PriceChart(
                     color = if (isSystemInDarkTheme()) Color.White else Color.Black,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = (chartWidth * fraction) - 10.dp, y = 14.dp)
+                        .offset(x = (scope.maxWidth * fraction) - 10.dp, y = 14.dp)
                         .width(20.dp),
                     textAlign = TextAlign.Center
                 )
@@ -523,7 +524,7 @@ fun ChartBar(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
