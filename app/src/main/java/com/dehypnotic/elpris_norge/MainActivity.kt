@@ -424,11 +424,17 @@ fun PriceChart(
 
     val overallMin = remember(pricesInfo, isNorgespris, effectiveMidpoint, isStromstotte, minPrice, minOriginalPrice) {
         if (isNorgespris) min(pricesInfo.minOfOrNull { it.originalPrice } ?: 0.0, effectiveMidpoint)
-        else if (isStromstotte) minPrice else minOriginalPrice
+        else {
+            val actualMin = pricesInfo.minOfOrNull { it.effectivePrice } ?: 0.0
+            min(0.0, actualMin)
+        }
     }
     val overallMax = remember(pricesInfo, isNorgespris, effectiveMidpoint, isStromstotte, maxEffectivePrice, maxPriceForScaling) {
         if (isNorgespris) max(pricesInfo.maxOfOrNull { it.originalPrice } ?: 0.0, effectiveMidpoint)
-        else if (isStromstotte) maxEffectivePrice else maxPriceForScaling
+        else {
+            val actualMax = pricesInfo.maxOfOrNull { it.effectivePrice } ?: 1.0
+            max(1.0, actualMax)
+        }
     }
     val chartRange = overallMax - overallMin
 
@@ -445,12 +451,12 @@ fun PriceChart(
     val isDarkTheme = isSystemInDarkTheme()
     val axisColor = if (isDarkTheme) Color.White else Color.Black
 
-    val minBarUiFraction = 0.14f
     fun getXFraction(value: Double): Float {
         return if (isNorgespris) {
             if (maxAbsoluteDeviation > 0) 0.5f + ((value - effectiveMidpoint) / (2 * maxAbsoluteDeviation)).toFloat() else 0.5f
         } else {
-            if (chartRange > 0) minBarUiFraction + (1f - minBarUiFraction) * ((value - overallMin) / chartRange).toFloat() else 0.5f
+            // Use the same domain mapping as bars (no extra UI offset) so 0 aligns with zeroFraction.
+            if (chartRange > 0) ((value - overallMin) / chartRange).toFloat().coerceIn(0f, 1f) else 0.5f
         }
     }
 
@@ -511,6 +517,8 @@ fun PriceChart(
                                 isNorgespris = isNorgespris,
                                 isStromstotte = isStromstotte,
                                 maxAbsoluteDeviation = maxAbsoluteDeviation,
+                                chartOverallMin = overallMin,
+                                chartOverallMax = overallMax,
                                 modifier = Modifier.fillParentMaxHeight(1f / 24f)
                             )
                         }
@@ -563,6 +571,8 @@ fun ChartBar(
     isNorgespris: Boolean,
     isStromstotte: Boolean,
     maxAbsoluteDeviation: Double,
+    chartOverallMin: Double,
+    chartOverallMax: Double,
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
@@ -572,7 +582,19 @@ fun ChartBar(
 
     Row(modifier = modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text = hour, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp), color = if (isCurrentHour) Color.Red else Color.Unspecified, fontWeight = if (isCurrentHour) FontWeight.Bold else null)
-        DefaultBar(priceInfo = priceInfo, maxPriceForScaling = maxPriceForScaling, minOriginalPrice = minOriginalPrice, minPrice = minPrice, maxEffectivePrice = maxEffectivePrice, priceText = priceText, isNorgespris = isNorgespris, isStromstotte = isStromstotte, maxAbsoluteDeviation = maxAbsoluteDeviation)
+        DefaultBar(
+            priceInfo = priceInfo,
+            maxPriceForScaling = maxPriceForScaling,
+            minOriginalPrice = minOriginalPrice,
+            minPrice = minPrice,
+            maxEffectivePrice = maxEffectivePrice,
+            priceText = priceText,
+            isNorgespris = isNorgespris,
+            isStromstotte = isStromstotte,
+            maxAbsoluteDeviation = maxAbsoluteDeviation,
+            chartOverallMin = chartOverallMin,
+            chartOverallMax = chartOverallMax
+        )
     }
 }
 
@@ -586,8 +608,11 @@ fun DefaultBar(
     priceText: String,
     isNorgespris: Boolean,
     isStromstotte: Boolean,
-    maxAbsoluteDeviation: Double
+    maxAbsoluteDeviation: Double,
+    chartOverallMin: Double,
+    chartOverallMax: Double
 ) {
+    val isDarkTheme = isSystemInDarkTheme()
     if (isNorgespris) {
         val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1
         val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
@@ -597,7 +622,9 @@ fun DefaultBar(
         val aboveFraction = if (maxAbsoluteDeviation > 0) (priceAboveMidpointValue / maxAbsoluteDeviation).toFloat() else 0f
         val colorRange = max(1.0, maxPriceForScaling) - minOriginalPrice
         val colorFraction = if (colorRange > 0) ((priceInfo.originalPrice - minOriginalPrice) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
-        val baseBarColor = if (priceInfo.originalPrice < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
+        val baseBarColor = if (priceInfo.originalPrice < 0) {
+            if (isDarkTheme) Color.White else Color.Black
+        } else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
         val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
         val textColorInside = if (luminance > 0.5) Color.Black else Color.White
         val textColorOutside = MaterialTheme.colorScheme.onSurface
@@ -608,7 +635,7 @@ fun DefaultBar(
                     val textBelow = String.format(Locale.forLanguageTag("no-NO"), "-%d", priceBelowMidpointValue.roundToInt())
                     val barIsShort = belowFraction < 0.2f
                     Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(belowFraction).background(baseBarColor), contentAlignment = Alignment.CenterEnd) { if (!barIsShort) Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = textColorInside, modifier = Modifier.padding(end = 4.dp), textAlign = TextAlign.End, softWrap = false) }
-                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = textColorOutside, modifier = Modifier.padding(end = 4.dp), softWrap = false); Spacer(Modifier.fillMaxWidth(belowFraction)) }
+                    if (barIsShort) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { Text(text = textBelow, style = MaterialTheme.typography.bodySmall, color = if (priceInfo.originalPrice < 0) baseBarColor else textColorOutside, modifier = Modifier.padding(end = 4.dp), softWrap = false); Spacer(Modifier.fillMaxWidth(belowFraction)) }
                 }
             }
             Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
@@ -623,16 +650,48 @@ fun DefaultBar(
         }
     } else {
         val priceInOre = priceInfo.effectivePrice
-        val colorRange = maxEffectivePrice - minPrice
-        val colorFraction = if (colorRange > 0) ((priceInOre - minPrice) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
-        val baseBarColor = if (priceInOre < 0) Color.Black else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
-        val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
-        val textColor = if (luminance > 0.5) Color.Black else Color.White
-        val minBarUiFraction = 0.14f
-        val fullBarFraction = (if (isStromstotte) { if (maxEffectivePrice - minPrice > 0) minBarUiFraction + (1f - minBarUiFraction) * ((priceInOre - minPrice) / (maxEffectivePrice - minPrice)).toFloat() else if (priceInOre > 0) 0.5f else 0f } else { if (maxPriceForScaling - minOriginalPrice > 0) minBarUiFraction + (1f - minBarUiFraction) * ((priceInfo.originalPrice - minOriginalPrice) / (maxPriceForScaling - minOriginalPrice)).toFloat() else if (priceInfo.originalPrice > 0) 0.5f else 0f }).coerceIn(0f, 1f)
-        Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fullBarFraction), contentAlignment = Alignment.CenterStart) {
-            Box(modifier = Modifier.fillMaxSize().background(baseBarColor))
-            Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = textColor, modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterStart))
+        val minPriceVal = if (isStromstotte) minPrice else minOriginalPrice
+        val maxPriceVal = if (isStromstotte) maxEffectivePrice else maxPriceForScaling
+
+        val range = (chartOverallMax - chartOverallMin).coerceAtLeast(0.0001)
+        val zeroFraction = ((0.0 - chartOverallMin) / range).toFloat().coerceIn(0f, 1f)
+        val priceFraction = ((priceInOre - chartOverallMin) / range).toFloat().coerceIn(0f, 1f)
+
+        val colorRange = maxPriceVal - minPriceVal
+        val colorFraction = if (colorRange > 0) ((priceInOre - minPriceVal) / colorRange).toFloat().coerceIn(0f, 1f) else 0f
+        val baseBarColor = if (priceInOre < 0) {
+            if (isDarkTheme) Color.White else Color.Black
+        } else Color(red = colorFraction, green = 1 - colorFraction, blue = 0f)
+
+        if (priceInOre < 0) {
+            val leftFraction = priceFraction.coerceIn(0f, 1f)
+            val barFraction = (zeroFraction - priceFraction).coerceAtLeast(0f)
+            val rightFraction = (1f - zeroFraction).coerceAtLeast(0f)
+
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                if (leftFraction > 0f) Spacer(modifier = Modifier.weight(leftFraction))
+                if (barFraction > 0f) {
+                    Box(modifier = Modifier.weight(barFraction).fillMaxHeight().background(baseBarColor))
+                }
+                Box(modifier = Modifier.weight(max(0.0001f, rightFraction)).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                    Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = Color.Red, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        } else {
+            val minBarUiFraction = 0.05f
+            val rawBarFraction = (priceFraction - zeroFraction).coerceAtLeast(0f)
+            val barFraction = max(rawBarFraction, min(minBarUiFraction, 1f - zeroFraction))
+            val rightFraction = (1f - zeroFraction - barFraction).coerceAtLeast(0f)
+            val luminance = 0.299 * baseBarColor.red + 0.587 * baseBarColor.green + 0.114 * baseBarColor.blue
+            val textColor = if (luminance > 0.5) Color.Black else Color.White
+
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                if (zeroFraction > 0f) Spacer(modifier = Modifier.weight(zeroFraction))
+                Box(modifier = Modifier.weight(barFraction).fillMaxHeight().background(baseBarColor), contentAlignment = Alignment.CenterStart) {
+                    Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = textColor, modifier = Modifier.padding(start = 4.dp))
+                }
+                if (rightFraction > 0f) Spacer(modifier = Modifier.weight(rightFraction))
+            }
         }
     }
 }
