@@ -550,7 +550,7 @@ fun ChartBar(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 1.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
