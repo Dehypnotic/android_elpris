@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -404,20 +405,97 @@ fun PriceChart(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            items(pricesInfo) { priceInfo ->
-                ChartBar(
-                    priceInfo = priceInfo,
-                    maxPriceForScaling = maxPriceForScaling,
-                    minOriginalPrice = minOriginalPrice,
-                    minPrice = minPrice,
-                    maxEffectivePrice = maxEffectivePrice,
-                    selectedDate = selectedDate,
-                    currentHour = currentHour,
-                    modifier = Modifier.fillParentMaxHeight(1f / 24f)
+
+        BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            val chartWidth = maxWidth
+            val chartHeight = maxHeight
+
+            // Vertical lines and price labels logic
+            val priceRange = maxPriceForScaling - minOriginalPrice
+            val step = when {
+                priceRange <= 50 -> 10.0
+                priceRange <= 125 -> 25.0
+                else -> 50.0
+            }
+
+            val startMark = (Math.ceil(minOriginalPrice / step) * step).toInt()
+            val endMark = (Math.floor(maxPriceForScaling / step) * step).toInt()
+            val marks = if (startMark <= endMark) {
+                (startMark..endMark step step.toInt()).map { it.toDouble() }
+            } else {
+                emptyList()
+            }.take(5)
+
+            val minBarUiFraction = 0.14f
+            val linePositions = marks.map { mark ->
+                val range = maxPriceForScaling - minOriginalPrice
+                val fraction = if (range > 0) {
+                    val scaledFraction = ((mark - minOriginalPrice) / range).toFloat()
+                    minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
+                } else {
+                    0.5f
+                }
+                fraction.coerceIn(0f, 1f)
+            }
+
+            // Draw horizontal line at the top
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(if (isSystemInDarkTheme()) Color.White else Color.Black)
+            )
+
+            // Draw vertical lines
+            linePositions.forEach { fraction ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
+                        .offset(x = chartWidth * fraction)
+                        .background(if (isSystemInDarkTheme()) Color.Gray.copy(alpha = 0.5f) else Color.LightGray)
+                )
+            }
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(pricesInfo) { priceInfo ->
+                    ChartBar(
+                        priceInfo = priceInfo,
+                        maxPriceForScaling = maxPriceForScaling,
+                        minOriginalPrice = minOriginalPrice,
+                        minPrice = minPrice,
+                        maxEffectivePrice = maxEffectivePrice,
+                        selectedDate = selectedDate,
+                        currentHour = currentHour,
+                        modifier = Modifier.fillParentMaxHeight(1f / 24f)
+                    )
+                }
+            }
+
+            // Draw horizontal line at the bottom
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(if (isSystemInDarkTheme()) Color.White else Color.Black)
+            )
+
+            // Price labels at the bottom
+            marks.zip(linePositions).forEach { (mark, fraction) ->
+                Text(
+                    text = mark.toInt().toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSystemInDarkTheme()) Color.White else Color.Black,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = (chartWidth * fraction) - 10.dp, y = 14.dp)
+                        .width(20.dp),
+                    textAlign = TextAlign.Center
                 )
             }
         }
+        Spacer(modifier = Modifier.height(16.dp)) // Space for labels
     }
 }
 
@@ -445,7 +523,7 @@ fun ChartBar(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 1.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
