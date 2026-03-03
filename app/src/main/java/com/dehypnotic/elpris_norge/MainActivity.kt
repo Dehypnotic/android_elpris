@@ -441,6 +441,9 @@ fun PriceChart(
         list.take(5)
     }
 
+    val isDarkTheme = isSystemInDarkTheme()
+    val axisColor = if (isDarkTheme) Color.White else Color.Black
+
     val minBarUiFraction = 0.14f
     fun getXFraction(value: Double): Float {
         return if (isNorgespris) {
@@ -462,17 +465,17 @@ fun PriceChart(
                 // Top Axis and price marks
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, size.height), end = androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2.dp.toPx())
+                        drawLine(color = axisColor, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, size.height), end = androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2.dp.toPx())
                         marks.forEach { mark ->
                             val x = labelPaddingPx + (size.width - labelPaddingPx) * getXFraction(mark.toDouble())
                             if (x in labelPaddingPx..size.width) {
-                                drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(x, size.height), end = androidx.compose.ui.geometry.Offset(x, size.height - 4.dp.toPx()), strokeWidth = 2.dp.toPx())
+                                drawLine(color = axisColor, start = androidx.compose.ui.geometry.Offset(x, size.height), end = androidx.compose.ui.geometry.Offset(x, size.height - 4.dp.toPx()), strokeWidth = 2.dp.toPx())
                             }
                         }
                     }
                     marks.forEach { mark ->
                         val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
-                        Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.BottomStart).offset(x = xPos - 12.dp, y = (-5).dp), textAlign = TextAlign.Center, color = Color.Black)
+                        Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.BottomStart).offset(x = xPos - 12.dp, y = (-5).dp), textAlign = TextAlign.Center, color = axisColor)
                     }
                 }
 
@@ -516,7 +519,7 @@ fun PriceChart(
                 // Bottom line and special labels (Strømstøtte / Norgespris)
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawLine(color = Color.Black, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f), end = androidx.compose.ui.geometry.Offset(size.width, 0f), strokeWidth = 2.dp.toPx())
+                        drawLine(color = axisColor, start = androidx.compose.ui.geometry.Offset(labelPaddingPx, 0f), end = androidx.compose.ui.geometry.Offset(size.width, 0f), strokeWidth = 2.dp.toPx())
                     }
                     val specialLines = if (isNorgespris) {
                         listOf(effectiveMidpoint to "Norgespris")
