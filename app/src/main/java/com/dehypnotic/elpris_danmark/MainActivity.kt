@@ -21,8 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,9 +41,6 @@ import java.util.Locale
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.round
-import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.text.BasicTextField
 
 private const val VAT_MULTIPLIER = 1.25
@@ -155,7 +150,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
             }
             if (fetchedPrices.isEmpty()) {
                 val today = LocalDate.now()
-                val url = "https://www.elprisenligenu.dk/api/v1/prices/${selectedDate.year}/${String.format("%02d-%02d", selectedDate.monthValue, selectedDate.dayOfMonth)}_${selectedZone}.json"
+                val url = "https://www.elprisenligenu.dk/api/v1/prices/${selectedDate.year}/${String.format(Locale.US, "%02d-%02d", selectedDate.monthValue, selectedDate.dayOfMonth)}_${selectedZone}.json"
                 error = when {
                     selectedDate.isAfter(today.plusDays(1)) ->
                         "Fremtidige priser strækker sig kun til følgende dag efter udgivelse tidligst kl. 13"
@@ -431,9 +426,10 @@ fun PriceChart(
     val gridLines = remember(gridPriceMin, gridPriceMax) {
         val diff = gridPriceMax - gridPriceMin
         val step = when {
-            diff <= 50 -> 10.0
-            diff <= 125 -> 25.0
-            else -> 50.0
+            diff <= 60 -> 10.0
+            diff <= 150 -> 25.0
+            diff <= 400 -> 50.0
+            else -> 100.0
         }
         val lines = mutableListOf<Double>()
         var current = ceil(gridPriceMin / step) * step
@@ -441,11 +437,7 @@ fun PriceChart(
             lines.add(current)
             current += step
         }
-        if (lines.size > 5) {
-            lines.take(5)
-        } else {
-            lines
-        }
+        lines
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -587,7 +579,7 @@ fun ChartBar(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 1.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
