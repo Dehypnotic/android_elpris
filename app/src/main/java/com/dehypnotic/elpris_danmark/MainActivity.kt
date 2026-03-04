@@ -118,7 +118,7 @@ fun PriceScreen(modifier: Modifier = Modifier, refreshTrigger: Int) {
         mutableStateOf(sharedPrefs.getBoolean("is_other_fees", false))
     }
     var otherFeesAmount by remember {
-        mutableStateOf(sharedPrefs.getFloat("other_fees_amount", 0f))
+        mutableFloatStateOf(sharedPrefs.getFloat("other_fees_amount", 0f))
     }
 
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
