@@ -415,25 +415,29 @@ fun PriceChart(
 
             // Vertical lines and price labels logic
             val priceRange = maxPriceForScaling - minOriginalPrice
-            val step = when {
-                priceRange <= 50 -> 5.0
-                priceRange <= 125 -> 25.0
-                else -> 50.0
-            }
+            val marks = remember(minOriginalPrice, maxPriceForScaling, priceRange) {
+                val list = mutableListOf<Int>()
+                if (priceRange <= 0) return@remember list
 
-            val startMark = (ceil(minOriginalPrice / step) * step).toInt()
-            val endMark = (floor(maxPriceForScaling / step) * step).toInt()
-            val marks = if (startMark <= endMark) {
-                (startMark..endMark step step.toInt()).map { it.toDouble() }
-            } else {
-                emptyList()
-            }.take(5)
+                val possibleSteps = listOf(1, 2, 3, 4, 5, 10, 25, 50, 100, 200)
+                // Find the smallest step that results in at most 5 lines
+                val step = possibleSteps.find { priceRange / it <= 5 } ?: 200
+
+                var currentMark = (floor(minOriginalPrice / step) * step).toInt()
+                if (currentMark < minOriginalPrice) currentMark += step
+
+                while (currentMark <= maxPriceForScaling) {
+                    list.add(currentMark)
+                    currentMark += step
+                }
+                list.map { it.toDouble() }
+            }
 
             val minBarUiFraction = 0.14f
             val linePositions = marks.map { mark ->
-                val range = maxPriceForScaling - minOriginalPrice
-                val fraction = if (range > 0) {
-                    val scaledFraction = ((mark - minOriginalPrice) / range).toFloat()
+                val r = (maxPriceForScaling - minOriginalPrice).toDouble()
+                val fraction = if (r > 0.0) {
+                    val scaledFraction = ((mark.toDouble() - minOriginalPrice.toDouble()) / r).toFloat()
                     minBarUiFraction + (1f - minBarUiFraction) * scaledFraction
                 } else {
                     0.5f
