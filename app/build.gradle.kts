@@ -12,7 +12,7 @@ android {
         applicationId = "com.dehypnotic.elpris_norge"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
+        versionCode = 15
         versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
