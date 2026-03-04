@@ -442,11 +442,19 @@ fun PriceChart(
     val marks = remember(overallMin, overallMax, chartRange) {
         val list = mutableListOf<Int>()
         if (chartRange <= 0) return@remember list
-        val step = when { chartRange < 50 -> 10; chartRange < 125 -> 25; else -> 50 }
-        var currentMark = (overallMin / step).toInt() * step
+
+        val possibleSteps = listOf(1, 2, 3, 4, 5, 10, 25, 50, 100, 200)
+        // Find the smallest step that results in at most 5 lines
+        val step = possibleSteps.find { chartRange / it <= 5 } ?: 200
+
+        var currentMark = (floor(overallMin / step) * step).toInt()
         if (currentMark < overallMin) currentMark += step
-        while (currentMark <= overallMax) { list.add(currentMark); currentMark += step }
-        list.take(5)
+
+        while (currentMark <= overallMax) {
+            list.add(currentMark)
+            currentMark += step
+        }
+        list
     }
 
     val isDarkTheme = isSystemInDarkTheme()
