@@ -468,7 +468,7 @@ fun PriceChart(
     Column(modifier = modifier.fillMaxSize()) {
         AutoResizeText(text = headerText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         BoxWithConstraints(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            val constraintsScope = this
+            val chartWidthDp = this.maxWidth
             Column(modifier = Modifier.fillMaxSize()) {
                 // Top Axis and price marks
                 Box(modifier = Modifier.fillMaxWidth().height(25.dp)) {
@@ -482,7 +482,7 @@ fun PriceChart(
                         }
                     }
                     marks.forEach { mark ->
-                        val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * getXFraction(mark.toDouble())
+                        val xPos = labelPadding + (chartWidthDp - labelPadding) * getXFraction(mark.toDouble())
                         Text(text = mark.toString(), style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), modifier = Modifier.align(Alignment.BottomStart).offset(x = xPos - 12.dp, y = (-5).dp), textAlign = TextAlign.Center, color = axisColor)
                     }
                 }
@@ -518,15 +518,14 @@ fun PriceChart(
                                 priceInfo = priceInfo,
                                 maxPriceForScaling = maxPriceForScaling,
                                 minOriginalPrice = minOriginalPrice,
-                                minPrice = minPrice,
-                                maxEffectivePrice = maxEffectivePrice,
                                 selectedDate = selectedDate,
                                 currentHour = currentTime.hour,
                                 isNorgespris = isNorgespris,
-                                isStromstotte = isStromstotte,
                                 maxAbsoluteDeviation = maxAbsoluteDeviation,
                                 chartOverallMin = overallMin,
                                 chartOverallMax = overallMax,
+                                labelPadding = labelPadding,
+                                chartWidth = chartWidthDp,
                                 modifier = Modifier.fillParentMaxHeight(1f / 24f)
                             )
                         }
@@ -548,9 +547,9 @@ fun PriceChart(
                         if (lineVal > overallMin + 0.01 && lineVal < overallMax - 0.01) {
                             val fraction = getXFraction(lineVal)
                             if (fraction in 0f..1f) {
-                                val xPos = labelPadding + (constraintsScope.maxWidth - labelPadding) * fraction
+                                val xPos = labelPadding + (chartWidthDp - labelPadding) * fraction
                                 val labelWidth = 65.dp
-                                val isTooFarRight = xPos + labelWidth / 2 > constraintsScope.maxWidth
+                                val isTooFarRight = xPos + labelWidth / 2 > chartWidthDp
                                 val labelTextAlign = if (isTooFarRight) TextAlign.End else TextAlign.Center
                                 val offset = if (isTooFarRight) xPos - labelWidth else xPos - labelWidth / 2
 
@@ -575,15 +574,14 @@ fun ChartBar(
     priceInfo: PriceInfo,
     maxPriceForScaling: Double,
     minOriginalPrice: Double,
-    minPrice: Double,
-    maxEffectivePrice: Double,
     selectedDate: LocalDate,
     currentHour: Int,
     isNorgespris: Boolean,
-    isStromstotte: Boolean,
     maxAbsoluteDeviation: Double,
     chartOverallMin: Double,
     chartOverallMax: Double,
+    labelPadding: androidx.compose.ui.unit.Dp,
+    chartWidth: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH") }
@@ -597,14 +595,13 @@ fun ChartBar(
             priceInfo = priceInfo,
             maxPriceForScaling = maxPriceForScaling,
             minOriginalPrice = minOriginalPrice,
-            minPrice = minPrice,
-            maxEffectivePrice = maxEffectivePrice,
             priceText = priceText,
             isNorgespris = isNorgespris,
-            isStromstotte = isStromstotte,
             maxAbsoluteDeviation = maxAbsoluteDeviation,
             chartOverallMin = chartOverallMin,
-            chartOverallMax = chartOverallMax
+            chartOverallMax = chartOverallMax,
+            labelPadding = labelPadding,
+            chartWidth = chartWidth
         )
     }
 }
@@ -614,16 +611,14 @@ fun DefaultBar(
     priceInfo: PriceInfo,
     maxPriceForScaling: Double,
     minOriginalPrice: Double,
-    minPrice: Double,
-    maxEffectivePrice: Double,
     priceText: String,
     isNorgespris: Boolean,
-    isStromstotte: Boolean,
     maxAbsoluteDeviation: Double,
     chartOverallMin: Double,
-    chartOverallMax: Double
+    chartOverallMax: Double,
+    labelPadding: androidx.compose.ui.unit.Dp,
+    chartWidth: androidx.compose.ui.unit.Dp
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
     if (isNorgespris) {
         val isMva = priceInfo.originalPrice > priceInfo.pricePoint.NOK_per_kWh * 100.1
         val effectiveMidpoint = if (isMva) NORGESPRIS_MIDPOINT_INCL_VAT_ORE else NORGESPRIS_MIDPOINT_EX_VAT_ORE
@@ -663,8 +658,6 @@ fun DefaultBar(
         }
     } else {
         val priceInOre = priceInfo.effectivePrice
-        val minPriceVal = if (isStromstotte) minPrice else minOriginalPrice
-        val maxPriceVal = if (isStromstotte) maxEffectivePrice else maxPriceForScaling
 
         val range = (chartOverallMax - chartOverallMin).coerceAtLeast(0.0001)
         val zeroFraction = ((0.0 - chartOverallMin) / range).toFloat().coerceIn(0f, 1f)
@@ -680,14 +673,29 @@ fun DefaultBar(
             val barFraction = (zeroFraction - priceFraction).coerceAtLeast(0f)
             val rightFraction = (1f - zeroFraction).coerceAtLeast(0f)
 
-            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                if (leftFraction > 0f) Spacer(modifier = Modifier.weight(leftFraction))
-                if (barFraction > 0f) {
-                    Box(modifier = Modifier.weight(barFraction).fillMaxHeight().background(baseBarColor))
+            Box(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    if (leftFraction > 0f) Spacer(modifier = Modifier.weight(leftFraction))
+                    if (barFraction > 0f) {
+                        Box(modifier = Modifier.weight(barFraction).fillMaxHeight().background(baseBarColor))
+                    }
+                    if (rightFraction > 0f) Spacer(modifier = Modifier.weight(rightFraction))
                 }
-                val remainingWeight = (1f - zeroFraction - barFraction).coerceAtLeast(0.0001f)
-                Box(modifier = Modifier.weight(remainingWeight).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                    Text(text = priceText, style = MaterialTheme.typography.bodySmall, color = Color.Red, modifier = Modifier.padding(start = 4.dp))
+                // Add price text overlay for negative prices
+                // Use a weight-based approach within a Row to ensure dynamic calculation matches bar layout
+                Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    if (zeroFraction > 0f) {
+                        Spacer(modifier = Modifier.weight(zeroFraction))
+                    }
+                    val remainingWeight = (1f - zeroFraction).coerceAtLeast(0.0001f)
+                    Box(modifier = Modifier.weight(remainingWeight).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                        Text(
+                            text = priceText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Red,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
                 }
             }
         } else {
