@@ -396,20 +396,21 @@ fun PriceChart(
     val minPrice = remember(pricesInfo) { pricesInfo.minOfOrNull { it.effectivePrice } ?: 0.0 }
     val averagePrice = remember(pricesInfo) { if (pricesInfo.isNotEmpty()) pricesInfo.map { it.effectivePrice }.average() else 0.0 }
 
-    val diff = maxPrice - minPrice
-    val step = when {
-        diff <= 50 -> 10.0
-        diff <= 125 -> 25.0
-        else -> 50.0
-    }
-
-    val lines = remember(minPrice, maxPrice, step) {
-        val firstLine = (Math.ceil(minPrice / step) * step).toInt()
+    val lines = remember(minPrice, maxPrice) {
         val list = mutableListOf<Int>()
-        var current = firstLine
-        while (current <= maxPrice && list.size < 5) {
-            list.add(current)
-            current += step.toInt()
+        val chartRange = maxPrice - minPrice
+        if (chartRange <= 0) return@remember list
+
+        val possibleSteps = listOf(1, 2, 3, 4, 5, 10, 25, 50, 100, 200)
+        // Find the smallest step that results in at most 5 lines
+        val step = possibleSteps.find { chartRange / it <= 5 } ?: 200
+
+        var currentMark = (Math.floor(minPrice / step) * step).toInt()
+        if (currentMark < minPrice) currentMark += step
+
+        while (currentMark <= maxPrice) {
+            list.add(currentMark)
+            currentMark += step
         }
         list
     }
@@ -448,9 +449,10 @@ fun PriceChart(
             // Background Lines (Drawn behind)
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(start = 24.dp)) {
                 val canvasWidth = size.width
+                val range = (maxPrice - minPrice).toDouble()
                 lines.forEach { linePrice ->
-                    val fraction = if (maxPrice - minPrice > 0) {
-                        (0.14f + (1f - 0.14f) * ((linePrice - minPrice) / (maxPrice - minPrice))).toFloat()
+                    val fraction = if (range > 0.0) {
+                        (0.14f + (1f - 0.14f) * ((linePrice.toDouble() - minPrice.toDouble()) / range)).toFloat()
                     } else 0.5f
                     val x = canvasWidth * fraction
                     drawLine(
@@ -497,9 +499,10 @@ fun PriceChart(
                 .height(40.dp)
         ) {
             val canvasWidth = this.maxWidth
+            val range = (maxPrice - minPrice).toDouble()
             lines.forEach { linePrice ->
-                val fraction = if (maxPrice - minPrice > 0) {
-                    (0.14f + (1f - 0.14f) * ((linePrice - minPrice) / (maxPrice - minPrice))).toFloat()
+                val fraction = if (range > 0.0) {
+                    (0.14f + (1f - 0.14f) * ((linePrice.toDouble() - minPrice.toDouble()) / range)).toFloat()
                 } else 0.5f
 
                 val xPos = canvasWidth * fraction
