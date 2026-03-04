@@ -707,7 +707,7 @@ fun DefaultBar(
                 }
             }
         } else {
-            val minBarUiFraction = 0.1f
+            val minBarUiFraction = 0.14f
             val rawBarFraction = (priceFraction - zeroFraction).coerceAtLeast(0f)
             val barFraction = max(rawBarFraction, min(minBarUiFraction, 1f - zeroFraction))
             val rightFraction = (1f - zeroFraction - barFraction).coerceAtLeast(0f)
